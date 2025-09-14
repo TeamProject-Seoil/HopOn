@@ -15,4 +15,7 @@ public class BusLocationDto {
 	private String congetion;	//혼잡도(0:정보없음,3:여유,4:보통,5:혼잡,6:매우혼잡)
 	private Double gpsX;	//x좌표
 	private Double gpsY;	//y좌표
+	private String sectOrd;	//구간순번
+	private String stopFlag;	//정류소 도착 여부(1:정차, 0:운행)
+
 }
