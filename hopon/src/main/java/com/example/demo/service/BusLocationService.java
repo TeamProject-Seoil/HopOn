@@ -53,10 +53,13 @@ public class BusLocationService {
                     node.path("nextStId").asText(),
                     node.path("congetion").asText(),
                     node.path("gpsX").asDouble(),
-                    node.path("gpsY").asDouble()
+                    node.path("gpsY").asDouble(),
+                    node.path("sectOrd").asText(),
+                    node.path("stopFlag").asText()
                 ));
             }
         }
         return list;
     }
 }
+
