@@ -1,0 +1,6 @@
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:15:29:42 +0900] "GET /api/busRoutePath?busRouteId=100100203 HTTP/1.1" 200 4451
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:15:29:42 +0900] "GET /favicon.ico HTTP/1.1" 404 4361
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:15:30:52 +0900] "GET /api/busRoutePath?busRouteId=100100203 HTTP/1.1" 200 4543
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:16:31:39 +0900] "GET /api/busRoutePath?busRouteId=100100203 HTTP/1.1" 200 4451
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:16:31:39 +0900] "GET /favicon.ico HTTP/1.1" 404 4361
+0:0:0:0:0:0:0:1 - - [04/Aug/2025:16:34:13 +0900] "GET /api/busRoutePath?busRouteId=100100203 HTTP/1.1" 200 4543
