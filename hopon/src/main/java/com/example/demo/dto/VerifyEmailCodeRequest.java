@@ -6,9 +6,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter @Setter
-public class FindPwRequest {
-    @NotBlank private String userid;
-    @NotBlank private String username;
-    @NotBlank private String tel;
+public class VerifyEmailCodeRequest {
+    @NotBlank private String verificationId;
     @Email @NotBlank private String email;
+    @NotBlank private String purpose;
+    @NotBlank private String code;
 }

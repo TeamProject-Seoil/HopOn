@@ -6,8 +6,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 @Getter @Setter
-public class FindIdRequest {
-    @NotBlank private String username;
-    @NotBlank private String tel;
-    @Email @NotBlank private String email;
+public class SendEmailCodeRequest {
+    @Email @NotBlank
+    private String email;
+    @NotBlank
+    private String purpose; // REGISTER | FIND_ID | RESET_PW
 }

@@ -1,11 +1,13 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.RegisterRequest;
-import com.example.demo.entity.*; import com.example.demo.repository.UserRepository;
+import com.example.demo.entity.*; 
+import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service; 
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 import java.io.InputStream;
 import java.security.SecureRandom;
@@ -19,7 +21,7 @@ public class UserService {
     public void registerWithProfile(RegisterRequest req, MultipartFile file) {
         validateDup(req);
 
-        // 프로필 이미지(업로드 없으면 기본 이미지)
+        // 기본/업로드 프로필
         byte[] imgBytes;
         try {
             if (file != null && !file.isEmpty()) {
@@ -33,15 +35,16 @@ public class UserService {
         // 앱별 기본 역할
         Role role = switch (req.getClientType()) {
             case "USER_APP"   -> Role.ROLE_USER;
-            case "DRIVER_APP" -> Role.ROLE_DRIVER; // 승인제가 필요하면 ROLE_USER로 두고 관리자 승격
+            case "DRIVER_APP" -> Role.ROLE_DRIVER;
             default -> throw new IllegalArgumentException("허용되지 않은 clientType: " + req.getClientType());
         };
 
+        var normalizedEmail = req.getEmail().trim().toLowerCase(); // ✅ 소문자 저장
         var user = UserEntity.builder()
                 .userid(req.getUserid())
                 .username(req.getUsername())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .email(req.getEmail())
+                .email(normalizedEmail)
                 .tel(req.getTel())
                 .profileImage(imgBytes)
                 .role(role)
@@ -50,31 +53,30 @@ public class UserService {
     }
 
     private void validateDup(RegisterRequest req) {
-        if (userRepository.existsByUserid(req.getUserid())) throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
-        if (req.getEmail()!=null && userRepository.existsByEmail(req.getEmail())) throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+        if (userRepository.existsByUserid(req.getUserid()))
+            throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
+        if (req.getEmail()!=null && userRepository.existsByEmail(req.getEmail().trim().toLowerCase()))
+            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
     }
     
-    /** 조건 일치 시 userid 반환 (없으면 null) */
     public String findUseridExact(String username, String tel, String email) {
-        return userRepository.findByUsernameAndTelAndEmail(username, tel, email)
+        return userRepository.findByUsernameAndTelAndEmail(username, tel, email.toLowerCase())
                 .map(UserEntity::getUserid)
                 .orElse(null);
     }
 
-    /** 조건 일치 시 임시 비번 발급/저장 후 임시비번(평문) 반환, 없으면 null */
     @Transactional
     public String resetPasswordWithTemp(String userid, String username, String tel, String email) {
-        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(userid, username, tel, email);
+        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(userid, username, tel, email.toLowerCase());
         if (opt.isEmpty()) return null;
 
         var user = opt.get();
-        String temp = generateTempPassword(10);              // 길이 10
-        user.setPassword(passwordEncoder.encode(temp));      // BCrypt 저장
+        String temp = generateTempPassword(10);
+        user.setPassword(passwordEncoder.encode(temp));
         userRepository.save(user);
         return temp;
     }
 
-    // 임시 비밀번호 생성기 (영문+숫자)
     private String generateTempPassword(int len) {
         final char[] pool = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
         SecureRandom r = new SecureRandom();

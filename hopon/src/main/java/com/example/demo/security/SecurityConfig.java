@@ -2,26 +2,19 @@ package com.example.demo.security;
 
 import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.http.HttpMethod;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.AuthenticationProvider;
+import org.springframework.context.annotation.*; import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.*; 
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.core.userdetails.*; 
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder; 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.CorsConfigurationSource;
-import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.cors.*;
 
 import java.util.List;
 
@@ -57,9 +50,7 @@ public class SecurityConfig {
     }
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
 
     @Bean
     public SecurityFilterChain filterChain(org.springframework.security.config.annotation.web.builders.HttpSecurity http) throws Exception {
@@ -70,21 +61,26 @@ public class SecurityConfig {
             .cors(Customizer.withDefaults())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(reg -> reg
-                // 프리플라이트 허용
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // 인증 없이 접근 가능한 인증/중복체크 엔드포인트
-                .requestMatchers(HttpMethod.POST, "/auth/register", "/auth/login", "/auth/refresh", "/auth/logout","/auth/find-id", "/auth/find-password").permitAll()
-                .requestMatchers(HttpMethod.GET,  "/auth/check").permitAll()
+                // 인증 없이 접근 가능한 엔드포인트들
+                .requestMatchers(HttpMethod.POST,
+                        "/auth/register",
+                        "/auth/login",
+                        "/auth/refresh",
+                        "/auth/logout",
+                        "/auth/email/send-code",
+                        "/auth/email/verify-code",
+                        "/auth/find-id-after-verify",
+                        "/auth/reset-password-after-verify"
+                ).permitAll()
+                .requestMatchers(HttpMethod.GET, "/auth/check").permitAll()
 
-                // 안드로이드에서 토큰 없이 호출하는 공공데이터 프록시 API 허용
+                // 필요 시에만 열어두기(프록시 등)
                 .requestMatchers(HttpMethod.GET,  "/api/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/**").permitAll()
 
-                // 헬스체크/에러(원하면)
                 .requestMatchers("/actuator/health", "/error").permitAll()
-
-                // 그 외는 인증 필요
                 .anyRequest().authenticated()
             )
             .authenticationProvider(authenticationProvider(userDetailsService()))
@@ -108,11 +104,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of("*")); // 필요 시 특정 도메인으로 제한
+        cfg.setAllowedOrigins(List.of("*"));
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));
         cfg.setExposedHeaders(List.of("*"));
-        cfg.setAllowCredentials(false); // 클라이언트에서 쿠키 쓸 경우 true + AllowedOrigins 구체화
+        cfg.setAllowCredentials(false);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", cfg);

@@ -1,10 +1,10 @@
-// controller/AuthController.java
 package com.example.demo.controller;
 
 import com.example.demo.dto.*;
 import com.example.demo.entity.*;
 import com.example.demo.repository.*;
 import com.example.demo.security.JwtTokenProvider;
+import com.example.demo.service.EmailVerificationService;
 import com.example.demo.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,47 +27,60 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/auth")
 @RequiredArgsConstructor
 public class AuthController {
+
+    private final PasswordEncoder passwordEncoder;
     private final UserService userService;
     private final AuthenticationManager authenticationManager;
     private final JwtTokenProvider tokenProvider;
     private final UserRepository userRepository;
     private final UserSessionRepository sessionRepository;
+    private final EmailVerificationService emailVerificationService;
 
-    // 설정에서 리프레시 만료 기간 읽어와서 하드코딩(7일) 제거
     @Value("${jwt.refresh-exp-days}")
     private long refreshExpDays;
 
-    // 절대 만료 상한(슬라이딩 연장 한도). 미설정 시(0) 비활성화
     @Value("${jwt.refresh-absolute-max-days:0}")
     private long refreshAbsoluteMaxDays;
+
+    // ✅ 아이디/이메일 중복 체크 (permitAll)
+    @GetMapping("/check")
+    public ResponseEntity<?> checkDup(
+            @RequestParam(required = false) String userid,
+            @RequestParam(required = false) String email
+    ) {
+        boolean useridTaken = userid != null && userRepository.existsByUserid(userid);
+        boolean emailTaken  = email  != null && userRepository.existsByEmail(email.trim().toLowerCase());
+        return ResponseEntity.ok(Map.of("useridTaken", useridTaken, "emailTaken", emailTaken));
+    }
 
     // 회원가입: JSON(data) + (optional) file
     @PostMapping(value = "/register", consumes = {"multipart/form-data"})
     public ResponseEntity<?> register(@RequestPart("data") @Validated RegisterRequest req,
                                       @RequestPart(value = "file", required = false) MultipartFile file) {
 
-        // 중복 체크만 바로 응답
         if (userRepository.existsByUserid(req.getUserid())) {
-            log.warn("회원가입 실패 - 아이디 중복: {}", req.getUserid());
-            return ResponseEntity.status(409).body(Map.of(
-                "ok", false, "reason", "DUPLICATE_USERID"
-            ));
+            return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_USERID"));
         }
-        if (req.getEmail() != null && userRepository.existsByEmail(req.getEmail())) {
-            log.warn("회원가입 실패 - 이메일 중복: {}", req.getEmail());
-            return ResponseEntity.status(409).body(Map.of(
-                "ok", false, "reason", "DUPLICATE_EMAIL"
-            ));
+        String normEmail = req.getEmail().trim().toLowerCase();
+        if (userRepository.existsByEmail(normEmail)) {
+            return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
         }
 
+        // ★ 이메일 인증 검증 & 사용 처리 (purpose = REGISTER)
+        Long vId = parseVerificationId(req.getVerificationId());
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, normEmail, "REGISTER");
+
+        // req 내부 email도 통일
+        req.setEmail(normEmail);
         userService.registerWithProfile(req, file);
-        log.info("회원가입 성공: userid={}, clientType={}", req.getUserid(), req.getClientType());
-        return ResponseEntity.status(201).body(Map.of(
-            "ok", true, "message", "REGISTERED", "userid", req.getUserid()
-        ));
+        return ResponseEntity.status(201).body(Map.of("ok", true, "message", "REGISTERED", "userid", req.getUserid()));
     }
 
-    // 로그인: 단일 기기 세션 + 앱-역할 매칭
+    private Long parseVerificationId(String s) {
+        try { return Long.parseLong(s); } catch (Exception e) { throw new IllegalArgumentException("verificationId 형식 오류"); }
+    }
+
+    // 로그인
     @PostMapping("/login")
     public ResponseEntity<?> login(@Validated @RequestBody AuthRequest req) {
         try {
@@ -110,7 +124,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(access, refresh, "Bearer", role));
     }
 
-    // 토큰 갱신: 세션 검증 + 리프레시 토큰 회전
+    // 토큰 갱신
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(
             @RequestParam("refreshToken") String refreshToken,
@@ -131,14 +145,14 @@ public class AuthController {
 
         var session = sessionOpt.get();
 
-        // 절대 만료 상한 검사(활성화 시)
+        // 절대 만료 상한 검사
         if (isAbsoluteCapExceeded(session)) {
             session.setRevoked(true);
             sessionRepository.save(session);
             throw new BadCredentialsException("Session absolute lifetime exceeded");
         }
 
-        // 재사용 감지(회전 이후 이전 토큰이 다시 오면 즉시 세션 폐기)
+        // 재사용 감지
         String presentedHash = com.example.demo.service.HashUtils.sha256Hex(refreshToken);
         if (!presentedHash.equals(session.getRefreshTokenHash())) {
             log.warn("리프레시 토큰 재사용(또는 위조) 감지: userid={}, app={}, device={}", userid, clientType, deviceId);
@@ -155,7 +169,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(newAccess, newRefresh, "Bearer", role));
     }
 
-    // 로그아웃: 해당 기기 세션 폐기
+    // 로그아웃
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestBody @Validated LogoutRequest req) {
         if (!tokenProvider.validate(req.getRefreshToken())) {
@@ -190,7 +204,7 @@ public class AuthController {
 
     private void upsertSession(UserEntity user, String clientType, String deviceId, String refreshToken) {
         var now = LocalDateTime.now();
-        var exp = now.plusDays(refreshExpDays); // 설정값 기반
+        var exp = now.plusDays(refreshExpDays);
 
         var opt = sessionRepository.findByUserAndClientType(user, clientType);
         if (opt.isPresent()) {
@@ -206,11 +220,10 @@ public class AuthController {
                     .clientType(clientType)
                     .deviceId(deviceId)
                     .refreshTokenHash(com.example.demo.service.HashUtils.sha256Hex(refreshToken))
-                    .expiresAt(exp) // createdAt은 @PrePersist로 설정됨, 아래 applyAbsoluteCapIfNeeded는 rotate에서 적용
+                    .expiresAt(exp)
                     .revoked(false)
                     .build();
             sessionRepository.save(s);
-            // 최초 생성 직후에도 절대 만료 상한 고려하여 만료 시각 보정
             if (refreshAbsoluteMaxDays > 0) {
                 s.setExpiresAt(applyAbsoluteCapIfNeeded(s, s.getExpiresAt()));
                 sessionRepository.save(s);
@@ -220,16 +233,13 @@ public class AuthController {
 
     private void rotateSession(UserSession s, String newRefreshToken) {
         var now = LocalDateTime.now();
-
-        // 절대 만료 상한 초과 시 즉시 폐기
         if (isAbsoluteCapExceeded(s)) {
             s.setRevoked(true);
             sessionRepository.save(s);
             throw new BadCredentialsException("Session absolute lifetime exceeded");
         }
-
         s.setRefreshTokenHash(com.example.demo.service.HashUtils.sha256Hex(newRefreshToken));
-        var desiredExp = now.plusDays(refreshExpDays); // 설정값 기반
+        var desiredExp = now.plusDays(refreshExpDays);
         s.setExpiresAt(applyAbsoluteCapIfNeeded(s, desiredExp));
         sessionRepository.save(s);
     }
@@ -243,47 +253,53 @@ public class AuthController {
         };
     }
 
-    // 절대 만료 상한 계산: createdAt + absoluteMaxDays 를 넘어가지 않도록 expiresAt 보정
     private LocalDateTime applyAbsoluteCapIfNeeded(UserSession s, LocalDateTime desiredExp) {
-        if (refreshAbsoluteMaxDays <= 0) return desiredExp; // 비활성화
+        if (refreshAbsoluteMaxDays <= 0) return desiredExp;
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return desiredExp.isAfter(capEnd) ? capEnd : desiredExp;
     }
 
     private boolean isAbsoluteCapExceeded(UserSession s) {
-        if (refreshAbsoluteMaxDays <= 0) return false; // 비활성화
+        if (refreshAbsoluteMaxDays <= 0) return false;
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return LocalDateTime.now().isAfter(capEnd);
     }
-    
-    // 사전 중복 확인: /auth/check?userid=abc&email=a@b.com (둘 중 하나만 보내도 됨)
-    @GetMapping("/check")
-    public ResponseEntity<?> checkDup(
-            @RequestParam(required = false) String userid,
-            @RequestParam(required = false) String email
-    ) {
-        boolean useridTaken = userid != null && userRepository.existsByUserid(userid);
-        boolean emailTaken  = email  != null && userRepository.existsByEmail(email);
-        return ResponseEntity.ok(Map.of("useridTaken", useridTaken, "emailTaken", emailTaken));
-    }
-    
-    @PostMapping("/find-id")
-    public ResponseEntity<?> findId(@RequestBody @Validated FindIdRequest req) {
-        String userid = userService.findUseridExact(req.getUsername(), req.getTel(), req.getEmail());
+
+    // === 아이디 찾기 (이메일 인증 이후) ===
+    @PostMapping("/find-id-after-verify")
+    public ResponseEntity<?> findIdAfterVerify(@RequestBody @Validated FindIdAfterVerifyRequest req) {
+        Long vId = Long.parseLong(req.getVerificationId());
+        String norm = req.getEmail().trim().toLowerCase();
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, norm, "FIND_ID");
+
+        String userid = userService.findUseridExact(req.getUsername(), req.getTel(), norm);
         if (userid == null) {
             return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
         }
         return ResponseEntity.ok(Map.of("ok", true, "userid", userid));
     }
 
-    // === 비밀번호 찾기(임시 비번 발급) ===
-    @PostMapping("/find-password")
-    public ResponseEntity<?> findPassword(@RequestBody @Validated FindPwRequest req) {
-        String temp = userService.resetPasswordWithTemp(req.getUserid(), req.getUsername(), req.getTel(), req.getEmail());
-        if (temp == null) {
+    // === 비밀번호 재설정 (이메일 인증 이후) ===
+    @PostMapping("/reset-password-after-verify")
+    public ResponseEntity<?> resetPasswordAfterVerify(@RequestBody @Validated ResetPasswordAfterVerifyRequest req) {
+        Long vId = Long.parseLong(req.getVerificationId());
+        String norm = req.getEmail().trim().toLowerCase();
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, norm, "RESET_PW");
+
+        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(
+                req.getUserid(), req.getUsername(), req.getTel(), norm);
+        if (opt.isEmpty()) {
             return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
         }
-        // 실제 서비스에서는 이메일/SMS로 전송하고 응답엔 ok만 주는 걸 추천
-        return ResponseEntity.ok(Map.of("ok", true, "tempPassword", temp));
+
+        var u = opt.get();
+        u.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        userRepository.save(u);
+
+        var sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
+        for (var s : sessions) s.setRevoked(true);
+        if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "PASSWORD_RESET"));
     }
 }

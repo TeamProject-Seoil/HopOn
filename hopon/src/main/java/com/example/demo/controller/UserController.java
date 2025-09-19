@@ -1,16 +1,16 @@
 package com.example.demo.controller;
 
 import com.example.demo.dto.UserResponse;
-import com.example.demo.dto.UpdateProfileRequest;          // ★ 추가
-import com.example.demo.dto.ChangePasswordRequest;          // ★ 추가
+import com.example.demo.dto.UpdateProfileRequest;
+import com.example.demo.dto.ChangePasswordRequest;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.repository.UserRepository;
-import com.example.demo.repository.UserSessionRepository;    // ★ 추가
+import com.example.demo.repository.UserSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.crypto.password.PasswordEncoder; // ★ 추가
-import org.springframework.validation.annotation.Validated;         // ★ 추가
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -25,9 +25,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class UserController {
     private final UserRepository userRepository;
-    private final PasswordEncoder passwordEncoder;              
-    private final UserSessionRepository sessionRepository;      
-    
+    private final PasswordEncoder passwordEncoder;
+    private final UserSessionRepository sessionRepository;
+
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(Authentication authentication) {
         String userid = (String) authentication.getPrincipal();
@@ -63,9 +63,9 @@ public class UserController {
         // ── 텍스트 필드
         if (req.getUsername()!=null && !req.getUsername().isBlank()) { u.setUsername(req.getUsername().trim()); changed = true; }
         if (req.getEmail()!=null) {
-            String newEmail = req.getEmail().trim();
+            String newEmail = req.getEmail().trim().toLowerCase(); // ✅ 소문자
             if (!newEmail.equalsIgnoreCase(u.getEmail()) && userRepository.existsByEmail(newEmail)) {
-                return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "EMAIL_IN_USE"));
+                return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
             }
             u.setEmail(newEmail); changed = true;
         }
@@ -104,18 +104,16 @@ public class UserController {
         var u = userRepository.findByUserid(userid).orElseThrow();
 
         if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
-            // 현재 비번 불일치
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
         }
         if (passwordEncoder.matches(req.getNewPassword(), u.getPassword())) {
-            // 새 비번이 기존과 동일
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "SAME_AS_OLD"));
         }
 
         u.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(u);
 
-        // 보안상: 모든 활성 세션 무효화 (재로그인 유도)
+        // 보안상: 모든 활성 세션 무효화
         List<com.example.demo.entity.UserSession> sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
         for (var s : sessions) s.setRevoked(true);
         if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
@@ -123,7 +121,6 @@ public class UserController {
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
-    // 헬퍼
     private UserResponse toResponse(UserEntity u) {
         return new UserResponse(
                 u.getUserNum(), u.getUserid(), u.getUsername(), u.getEmail(), u.getTel(),

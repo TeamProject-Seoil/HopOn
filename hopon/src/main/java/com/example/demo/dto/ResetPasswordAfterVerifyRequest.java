@@ -1,0 +1,21 @@
+package com.example.demo.dto;
+
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import lombok.Getter;
+import lombok.Setter;
+
+@Getter @Setter
+public class ResetPasswordAfterVerifyRequest {
+    @NotBlank private String userid;
+    @NotBlank private String username;
+    @NotBlank private String tel;
+    @Email @NotBlank private String email;
+
+    @NotBlank private String verificationId; // 이메일 인증 성공한 ID
+
+    @NotBlank
+    @Size(min = 8, max = 64, message = "새 비밀번호는 8~64자")
+    private String newPassword;
+}

@@ -1,0 +1,11 @@
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:00:38 +0900] "GET /mail/test?to=xpdlf5103@naver.com HTTP/1.1" 401 24
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:02:57 +0900] "POST /auth/email/send-code HTTP/1.1" 500 13926
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:18:31 +0900] "POST /auth/email/send-code HTTP/1.1" 500 13926
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:20:40 +0900] "POST /auth/email/send-code HTTP/1.1" 500 13926
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:44:39 +0900] "POST /auth/email/send-code HTTP/1.1" 500 13926
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:52:33 +0900] "POST /auth/email/send-code HTTP/1.1" 500 13926
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:15:59:37 +0900] "POST /auth/email/send-code HTTP/1.1" 200 65
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:16:56:16 +0900] "POST /auth/email/verify-code HTTP/1.1" 409 95
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:16:56:23 +0900] "POST /auth/email/send-code HTTP/1.1" 200 65
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:16:56:54 +0900] "POST /auth/email/verify-code HTTP/1.1" 200 43
+0:0:0:0:0:0:0:1 - - [18/Sep/2025:16:58:00 +0900] "POST /auth/register HTTP/1.1" 201 61
