@@ -1,11 +1,10 @@
 package com.example.demo.dto;
 
+import com.example.demo.entity.ApprovalStatus;
 import com.example.demo.entity.Role;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.*;
 
-@Getter @Setter @AllArgsConstructor
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
 public class UserResponse {
     private Long userNum;
     private String userid;
@@ -14,4 +13,9 @@ public class UserResponse {
     private String tel;
     private Role role;
     private boolean hasProfileImage;
+
+    // 👇 추가
+    private String company;
+    private ApprovalStatus approvalStatus;
+    private boolean hasDriverLicenseFile;
 }

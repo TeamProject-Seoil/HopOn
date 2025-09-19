@@ -75,7 +75,7 @@ public class SecurityConfig {
                         "/auth/reset-password-after-verify"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/auth/check").permitAll()
-
+                .requestMatchers("/admin/**").hasRole("ADMIN")
                 // 필요 시에만 열어두기(프록시 등)
                 .requestMatchers(HttpMethod.GET,  "/api/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/**").permitAll()

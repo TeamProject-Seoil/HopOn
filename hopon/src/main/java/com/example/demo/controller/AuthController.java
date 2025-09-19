@@ -42,37 +42,58 @@ public class AuthController {
     @Value("${jwt.refresh-absolute-max-days:0}")
     private long refreshAbsoluteMaxDays;
 
-    // ✅ 아이디/이메일 중복 체크 (permitAll)
+    // === 아이디/이메일 중복 체크 ===
     @GetMapping("/check")
     public ResponseEntity<?> checkDup(
             @RequestParam(required = false) String userid,
             @RequestParam(required = false) String email
     ) {
         boolean useridTaken = userid != null && userRepository.existsByUserid(userid);
-        boolean emailTaken  = email  != null && userRepository.existsByEmail(email.trim().toLowerCase());
+        boolean emailTaken  = email  != null && userRepository.existsByEmail(email);
         return ResponseEntity.ok(Map.of("useridTaken", useridTaken, "emailTaken", emailTaken));
     }
 
-    // 회원가입: JSON(data) + (optional) file
+    // === 회원가입 (multipart/form-data) ===
+    // data: RegisterRequest(JSON), file: 프로필 이미지(optional), license: 운전면허(드라이버만 필수)
     @PostMapping(value = "/register", consumes = {"multipart/form-data"})
     public ResponseEntity<?> register(@RequestPart("data") @Validated RegisterRequest req,
-                                      @RequestPart(value = "file", required = false) MultipartFile file) {
+                                      @RequestPart(value = "file", required = false) MultipartFile file,
+                                      @RequestPart(value = "license", required = false) MultipartFile license) {
 
         if (userRepository.existsByUserid(req.getUserid())) {
             return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_USERID"));
         }
-        String normEmail = req.getEmail().trim().toLowerCase();
-        if (userRepository.existsByEmail(normEmail)) {
+        if (req.getEmail() != null && userRepository.existsByEmail(req.getEmail())) {
             return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
         }
 
-        // ★ 이메일 인증 검증 & 사용 처리 (purpose = REGISTER)
+        // 이메일 인증(REGISTER) 확인 & 사용 처리
         Long vId = parseVerificationId(req.getVerificationId());
-        emailVerificationService.ensureVerifiedAndMarkUsed(vId, normEmail, "REGISTER");
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "REGISTER");
 
-        // req 내부 email도 통일
-        req.setEmail(normEmail);
-        userService.registerWithProfile(req, file);
+        // DRIVER_APP이면 회사/면허 파일 검증
+        if ("DRIVER_APP".equals(req.getClientType())) {
+            if (req.getCompany() == null || req.getCompany().isBlank()) {
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "COMPANY_REQUIRED_FOR_DRIVER"));
+            }
+            if (license == null || license.isEmpty()) {
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "LICENSE_REQUIRED_FOR_DRIVER"));
+            }
+            if (license.getSize() > 10L * 1024 * 1024) { // 10MB
+                return ResponseEntity.status(413).body(Map.of("ok", false, "reason", "LICENSE_TOO_LARGE"));
+            }
+            String ct = license.getContentType();
+            if (ct == null || !(ct.startsWith("image/") || "application/pdf".equals(ct))) {
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_LICENSE_TYPE"));
+            }
+        } else {
+            // USER_APP이면 driver 전용 필드 무시
+            license = null;
+            req.setCompany(null);
+        }
+
+        // 서비스에서 역할/승인상태/파일 처리
+        userService.registerWithProfile(req, file, license);
         return ResponseEntity.status(201).body(Map.of("ok", true, "message", "REGISTERED", "userid", req.getUserid()));
     }
 
@@ -80,7 +101,7 @@ public class AuthController {
         try { return Long.parseLong(s); } catch (Exception e) { throw new IllegalArgumentException("verificationId 형식 오류"); }
     }
 
-    // 로그인
+    // === 로그인: 단일 기기 세션 + 앱-역할 매칭 (+ 드라이버 승인 검사) ===
     @PostMapping("/login")
     public ResponseEntity<?> login(@Validated @RequestBody AuthRequest req) {
         try {
@@ -101,6 +122,14 @@ public class AuthController {
         if (!isAllowed(clientType, role)) {
             log.warn("로그인 실패 - 앱 권한 불일치: userid={}, role={}, clientType={}", req.getUserid(), role, clientType);
             return ResponseEntity.status(403).header("X-Reason", "ROLE_NOT_ALLOWED_FOR_APP").build();
+        }
+
+        // 드라이버앱 로그인 시 승인 필요
+        if ("DRIVER_APP".equals(clientType) && user.getRole() == Role.ROLE_DRIVER) {
+            if (user.getApprovalStatus() != ApprovalStatus.APPROVED) {
+                log.warn("로그인 실패 - 드라이버 미승인: userid={}, status={}", req.getUserid(), user.getApprovalStatus());
+                return ResponseEntity.status(403).header("X-Reason", "DRIVER_NOT_APPROVED").build();
+            }
         }
 
         var existing = sessionRepository.findByUserAndClientType(user, clientType);
@@ -124,7 +153,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(access, refresh, "Bearer", role));
     }
 
-    // 토큰 갱신
+    // === 리프레시 토큰 갱신 ===
     @PostMapping("/refresh")
     public ResponseEntity<AuthResponse> refresh(
             @RequestParam("refreshToken") String refreshToken,
@@ -145,7 +174,7 @@ public class AuthController {
 
         var session = sessionOpt.get();
 
-        // 절대 만료 상한 검사
+        // 절대 수명 상한 검사
         if (isAbsoluteCapExceeded(session)) {
             session.setRevoked(true);
             sessionRepository.save(session);
@@ -169,7 +198,7 @@ public class AuthController {
         return ResponseEntity.ok(new AuthResponse(newAccess, newRefresh, "Bearer", role));
     }
 
-    // 로그아웃
+    // === 로그아웃 ===
     @PostMapping("/logout")
     public ResponseEntity<?> logout(@RequestBody @Validated LogoutRequest req) {
         if (!tokenProvider.validate(req.getRefreshToken())) {
@@ -202,6 +231,44 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("ok", true, "message", "LOGGED_OUT"));
     }
 
+    // === 아이디 찾기 (이메일 인증 이후) ===
+    @PostMapping("/find-id-after-verify")
+    public ResponseEntity<?> findIdAfterVerify(@RequestBody @Validated FindIdAfterVerifyRequest req) {
+        Long vId = Long.parseLong(req.getVerificationId());
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "FIND_ID");
+
+        String userid = userService.findUseridExact(req.getUsername(), req.getTel(), req.getEmail());
+        if (userid == null) {
+            return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
+        }
+        return ResponseEntity.ok(Map.of("ok", true, "userid", userid));
+    }
+
+    // === 비밀번호 재설정 (이메일 인증 이후) ===
+    @PostMapping("/reset-password-after-verify")
+    public ResponseEntity<?> resetPasswordAfterVerify(@RequestBody @Validated ResetPasswordAfterVerifyRequest req) {
+        Long vId = Long.parseLong(req.getVerificationId());
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "RESET_PW");
+
+        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(
+                req.getUserid(), req.getUsername(), req.getTel(), req.getEmail());
+        if (opt.isEmpty()) {
+            return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
+        }
+
+        var u = opt.get();
+        u.setPassword(passwordEncoder.encode(req.getNewPassword()));
+        userRepository.save(u);
+
+        // 모든 활성 세션 무효화
+        var sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
+        for (var s : sessions) s.setRevoked(true);
+        if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "PASSWORD_RESET"));
+    }
+
+    // ───────── 내부 헬퍼들 ─────────
     private void upsertSession(UserEntity user, String clientType, String deviceId, String refreshToken) {
         var now = LocalDateTime.now();
         var exp = now.plusDays(refreshExpDays);
@@ -263,43 +330,5 @@ public class AuthController {
         if (refreshAbsoluteMaxDays <= 0) return false;
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return LocalDateTime.now().isAfter(capEnd);
-    }
-
-    // === 아이디 찾기 (이메일 인증 이후) ===
-    @PostMapping("/find-id-after-verify")
-    public ResponseEntity<?> findIdAfterVerify(@RequestBody @Validated FindIdAfterVerifyRequest req) {
-        Long vId = Long.parseLong(req.getVerificationId());
-        String norm = req.getEmail().trim().toLowerCase();
-        emailVerificationService.ensureVerifiedAndMarkUsed(vId, norm, "FIND_ID");
-
-        String userid = userService.findUseridExact(req.getUsername(), req.getTel(), norm);
-        if (userid == null) {
-            return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
-        }
-        return ResponseEntity.ok(Map.of("ok", true, "userid", userid));
-    }
-
-    // === 비밀번호 재설정 (이메일 인증 이후) ===
-    @PostMapping("/reset-password-after-verify")
-    public ResponseEntity<?> resetPasswordAfterVerify(@RequestBody @Validated ResetPasswordAfterVerifyRequest req) {
-        Long vId = Long.parseLong(req.getVerificationId());
-        String norm = req.getEmail().trim().toLowerCase();
-        emailVerificationService.ensureVerifiedAndMarkUsed(vId, norm, "RESET_PW");
-
-        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(
-                req.getUserid(), req.getUsername(), req.getTel(), norm);
-        if (opt.isEmpty()) {
-            return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
-        }
-
-        var u = opt.get();
-        u.setPassword(passwordEncoder.encode(req.getNewPassword()));
-        userRepository.save(u);
-
-        var sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
-        for (var s : sessions) s.setRevoked(true);
-        if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
-
-        return ResponseEntity.ok(Map.of("ok", true, "message", "PASSWORD_RESET"));
     }
 }

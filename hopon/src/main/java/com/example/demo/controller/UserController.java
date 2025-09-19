@@ -1,11 +1,17 @@
+// src/main/java/com/example/demo/controller/UserController.java
 package com.example.demo.controller;
 
 import com.example.demo.dto.UserResponse;
 import com.example.demo.dto.UpdateProfileRequest;
 import com.example.demo.dto.ChangePasswordRequest;
+import com.example.demo.dto.DeleteAccountRequest;
+import com.example.demo.entity.Role;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserSessionRepository;
+import com.example.demo.service.EmailVerificationService; // ✅ 추가
+
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.*;
 import org.springframework.security.core.Authentication;
@@ -27,6 +33,7 @@ public class UserController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserSessionRepository sessionRepository;
+    private final EmailVerificationService emailVerificationService; // ✅ 주입
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(Authentication authentication) {
@@ -61,15 +68,50 @@ public class UserController {
         boolean changed = false;
 
         // ── 텍스트 필드
-        if (req.getUsername()!=null && !req.getUsername().isBlank()) { u.setUsername(req.getUsername().trim()); changed = true; }
-        if (req.getEmail()!=null) {
-            String newEmail = req.getEmail().trim().toLowerCase(); // ✅ 소문자
-            if (!newEmail.equalsIgnoreCase(u.getEmail()) && userRepository.existsByEmail(newEmail)) {
-                return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
-            }
-            u.setEmail(newEmail); changed = true;
+        if (req.getUsername()!=null && !req.getUsername().isBlank()) {
+            u.setUsername(req.getUsername().trim());
+            changed = true;
         }
-        if (req.getTel()!=null && !req.getTel().isBlank()) { u.setTel(req.getTel().trim()); changed = true; }
+
+        // ✅ 이메일 변경: 실제 변경 시에만 인증/중복검사
+        if (req.getEmail()!=null) {
+            String newEmail = req.getEmail().trim().toLowerCase();
+            String oldEmail = u.getEmail() == null ? null : u.getEmail().trim().toLowerCase();
+
+            if (!newEmail.equals(oldEmail)) {
+                // 1) 중복 검사
+                if (userRepository.existsByEmail(newEmail)) {
+                    return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
+                }
+                // 2) 인증 필수: verificationId 필요
+                if (req.getEmailVerificationId() == null || req.getEmailVerificationId().isBlank()) {
+                    return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "EMAIL_VERIFICATION_REQUIRED"));
+                }
+                Long vId;
+                try { vId = Long.parseLong(req.getEmailVerificationId()); }
+                catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_VERIFICATION_ID")); }
+
+                // 3) 이메일 인증 확인 + 사용처리 (purpose = CHANGE_EMAIL)
+                emailVerificationService.ensureVerifiedAndMarkUsed(vId, newEmail, "CHANGE_EMAIL");
+
+                u.setEmail(newEmail);
+                changed = true;
+            }
+        }
+
+        if (req.getTel()!=null && !req.getTel().isBlank()) {
+            u.setTel(req.getTel().trim());
+            changed = true;
+        }
+
+        // ✅ 회사명 변경: 드라이버만 허용
+        if (req.getCompany()!=null) {
+            if (u.getRole() != Role.ROLE_DRIVER) {
+                return ResponseEntity.status(403).body(Map.of("ok", false, "reason", "COMPANY_CHANGE_ONLY_FOR_DRIVER"));
+            }
+            u.setCompany(req.getCompany().trim());
+            changed = true;
+        }
 
         // ── 사진 처리 (상호 배타)
         final long MAX_IMAGE_BYTES = 2L * 1024 * 1024; // 2MB
@@ -121,10 +163,43 @@ public class UserController {
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
+    // 헬퍼
     private UserResponse toResponse(UserEntity u) {
-        return new UserResponse(
-                u.getUserNum(), u.getUserid(), u.getUsername(), u.getEmail(), u.getTel(),
-                u.getRole(), u.getProfileImage()!=null
-        );
+        return UserResponse.builder()
+                .userNum(u.getUserNum())
+                .userid(u.getUserid())
+                .username(u.getUsername())
+                .email(u.getEmail())
+                .tel(u.getTel())
+                .role(u.getRole())
+                .hasProfileImage(u.getProfileImage()!=null)
+                .company(u.getCompany())
+                .approvalStatus(u.getApprovalStatus())
+                .hasDriverLicenseFile(u.getDriverLicenseFile()!=null)
+                .build();
+    }
+    
+ // ───────── 계정 탈퇴 (비밀번호만 확인) ─────────
+    @DeleteMapping("/me")
+    @Transactional
+    public ResponseEntity<?> deleteMe(Authentication authentication,
+                                      @RequestBody @Validated DeleteAccountRequest req) {
+        String userid = (String) authentication.getPrincipal();
+        var u = userRepository.findByUserid(userid).orElseThrow();
+
+        // 1) 비밀번호 확인
+        if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
+            return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
+        }
+
+        // 2) (선택) 활성 세션 revoke — 즉시 리프레시 토큰 무효화
+        var active = sessionRepository.findByUserAndRevokedIsFalse(u);
+        for (var s : active) s.setRevoked(true);
+        if (!active.isEmpty()) sessionRepository.saveAll(active);
+
+        // 3) 계정 삭제 (DB에 FK ON DELETE CASCADE면 세션도 함께 정리됨)
+        userRepository.delete(u);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
     }
 }
