@@ -1,3 +1,4 @@
+// src/main/java/com/example/demo/service/UserService.java
 package com.example.demo.service;
 
 import com.example.demo.dto.RegisterRequest;
@@ -6,12 +7,14 @@ import com.example.demo.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-import java.io.InputStream;
-import java.security.SecureRandom;
 
-@Service @RequiredArgsConstructor
+import java.io.InputStream;
+
+@Service
+@RequiredArgsConstructor
 public class UserService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -20,7 +23,6 @@ public class UserService {
     public void registerWithProfile(RegisterRequest req, MultipartFile profile, MultipartFile license) {
         validateDup(req);
 
-        // 프로필 이미지(업로드 없으면 기본 이미지)
         byte[] imgBytes;
         try {
             if (profile != null && !profile.isEmpty()) {
@@ -31,7 +33,6 @@ public class UserService {
             }
         } catch (Exception e) { throw new RuntimeException("프로필 이미지 처리 실패", e); }
 
-        // 앱별 역할/승인
         Role role = switch (req.getClientType()) {
             case "USER_APP"   -> Role.ROLE_USER;
             case "DRIVER_APP" -> Role.ROLE_DRIVER;
@@ -41,7 +42,6 @@ public class UserService {
                 ? ApprovalStatus.PENDING
                 : ApprovalStatus.APPROVED;
 
-        // DRIVER 전용 면허 파일
         byte[] licenseBytes = null;
         try {
             if ("DRIVER_APP".equals(req.getClientType()) && license != null && !license.isEmpty()) {
@@ -65,33 +65,16 @@ public class UserService {
     }
 
     private void validateDup(RegisterRequest req) {
-        if (userRepository.existsByUserid(req.getUserid())) throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
-        if (req.getEmail()!=null && userRepository.existsByEmail(req.getEmail())) throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+        if (userRepository.existsByUserid(req.getUserid()))
+            throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
+        if (req.getEmail()!=null && userRepository.existsByEmail(req.getEmail()))
+            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
     }
 
-    public String findUseridExact(String username, String tel, String email) {
-        return userRepository.findByUsernameAndTelAndEmail(username, tel, email)
+    /** 이름+이메일로 아이디 찾기 */
+    public String findUseridByNameEmail(String username, String email) {
+        return userRepository.findByUsernameAndEmail(username, email)
                 .map(UserEntity::getUserid)
                 .orElse(null);
-    }
-
-    @Transactional
-    public String resetPasswordWithTemp(String userid, String username, String tel, String email) {
-        var opt = userRepository.findByUseridAndUsernameAndTelAndEmail(userid, username, tel, email);
-        if (opt.isEmpty()) return null;
-
-        var user = opt.get();
-        String temp = generateTempPassword(10);
-        user.setPassword(passwordEncoder.encode(temp));
-        userRepository.save(user);
-        return temp;
-    }
-
-    private String generateTempPassword(int len) {
-        final char[] pool = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789".toCharArray();
-        SecureRandom r = new SecureRandom();
-        StringBuilder sb = new StringBuilder(len);
-        for (int i = 0; i < len; i++) sb.append(pool[r.nextInt(pool.length)]);
-        return sb.toString();
     }
 }

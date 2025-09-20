@@ -9,6 +9,7 @@ import com.example.demo.entity.Role;
 import com.example.demo.entity.UserEntity;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserSessionRepository;
+import com.example.demo.security.PasswordPolicy;
 import com.example.demo.service.EmailVerificationService; // ✅ 추가
 
 import jakarta.transaction.Transactional;
@@ -148,6 +149,12 @@ public class UserController {
         if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
         }
+        
+        // ▼ 비밀번호 정책 검사
+        String reason = PasswordPolicy.validateAndReason(req.getNewPassword());
+        if (reason != null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "PASSWORD_POLICY_VIOLATION", "message", reason));
+        }
         if (passwordEncoder.matches(req.getNewPassword(), u.getPassword())) {
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "SAME_AS_OLD"));
         }
@@ -155,8 +162,7 @@ public class UserController {
         u.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(u);
 
-        // 보안상: 모든 활성 세션 무효화
-        List<com.example.demo.entity.UserSession> sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
+        var sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
         for (var s : sessions) s.setRevoked(true);
         if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
 

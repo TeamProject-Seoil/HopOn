@@ -3,6 +3,7 @@ package com.example.demo.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -10,7 +11,9 @@ import lombok.Setter;
 @Getter @Setter
 public class RegisterRequest {
     @NotBlank private String userid;
-    @NotBlank private String password;
+    @NotBlank
+    @Pattern(regexp = "^[A-Za-z0-9]{10,16}$", message = "비밀번호는 10~16자 영문/숫자만 가능합니다.")
+    private String password;
     @Email @NotBlank private String email;
     @NotBlank private String username;
     private String tel;

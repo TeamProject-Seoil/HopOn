@@ -1,3 +1,4 @@
+// src/main/java/com/example/demo/service/EmailVerificationService.java
 package com.example.demo.service;
 
 import com.example.demo.entity.EmailVerification;
@@ -22,7 +23,7 @@ public class EmailVerificationService {
 
     @Transactional
     public EmailVerification createAndSend(String email, String purpose, EmailSender sender) {
-        String norm = email.trim().toLowerCase(); // ✅ 통일
+        String norm = email.trim().toLowerCase();
         String code = generate6();
         String hash = HashUtils.sha256Hex(code);
         var ev = EmailVerification.builder()
@@ -41,7 +42,7 @@ public class EmailVerificationService {
 
     @Transactional
     public EmailVerification verify(Long verificationId, String email, String purpose, String code) {
-        String norm = email.trim().toLowerCase(); // ✅ 통일
+        String norm = email.trim().toLowerCase();
         var ev = repo.findByIdAndEmailAndPurpose(verificationId, norm, purpose)
                 .orElseThrow(() -> new IllegalArgumentException("인증 요청을 찾을 수 없습니다."));
         if (ev.isUsed()) throw new IllegalStateException("이미 사용된 인증입니다.");
@@ -60,7 +61,7 @@ public class EmailVerificationService {
 
     @Transactional
     public void ensureVerifiedAndMarkUsed(Long verificationId, String email, String purpose) {
-        String norm = email.trim().toLowerCase(); // ✅ 통일
+        String norm = email.trim().toLowerCase();
         var ev = repo.findByIdAndEmailAndPurpose(verificationId, norm, purpose)
                 .orElseThrow(() -> new IllegalArgumentException("유효한 이메일 인증이 없습니다."));
         if (!ev.isVerified()) throw new IllegalStateException("이메일 인증이 완료되지 않았습니다.");

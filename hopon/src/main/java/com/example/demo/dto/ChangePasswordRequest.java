@@ -1,6 +1,7 @@
 package com.example.demo.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
@@ -8,6 +9,8 @@ import lombok.Setter;
 @Getter @Setter
 public class ChangePasswordRequest {
     @NotBlank private String currentPassword;
-    @NotBlank @Size(min = 8, max = 64, message = "새 비밀번호는 8~64자")
+    @NotBlank
+    @Pattern(regexp = "^[A-Za-z0-9]{10,16}$", message = "새 비밀번호는 10~16자 영문/숫자만 가능합니다.")
     private String newPassword;
+
 }
