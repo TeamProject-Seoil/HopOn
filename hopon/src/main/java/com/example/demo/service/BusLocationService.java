@@ -55,7 +55,11 @@ public class BusLocationService {
                     node.path("gpsX").asDouble(),
                     node.path("gpsY").asDouble(),
                     node.path("sectOrd").asText(),
-                    node.path("stopFlag").asText()
+                    node.path("stopFlag").asText(),
+                        node.path("sectionId").asText(),
+                        node.path("sectDist").asDouble(),
+                        node.path("fullSectDist").asDouble(),
+                        node.path("dataTm").asText()
                 ));
             }
         }

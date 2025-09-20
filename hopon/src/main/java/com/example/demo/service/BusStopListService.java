@@ -55,7 +55,8 @@ public class BusStopListService {
                     node.path("routeType").asText(),
                     node.path("gpsX").asDouble(),
                     node.path("gpsY").asDouble(),
-                    node.path("trnstnid").asText()
+                    node.path("trnstnid").asText(),
+                        node.path("section").asText()
                 ));
             }
         }

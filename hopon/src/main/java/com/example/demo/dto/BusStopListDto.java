@@ -19,4 +19,5 @@ public class BusStopListDto {
 	private Double gpsX;	//x좌표
 	private Double gpsY;	//y좌표
 	private String trnstnid;	//회차지정류장 Id (ars말고 정류장ID)
+    private String section;     //섹션 ID
 }

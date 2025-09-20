@@ -17,4 +17,8 @@ public class BusLocationDto {
 	private Double gpsY;	//y좌표
 	private String sectOrd;	//구간순번
 	private String stopFlag;	//정류소 도착 여부(1:정차, 0:운행)
+	private String sectionId;	//노선 구간 ID
+	private Double sectDist;	//구간옵셋거리
+	private Double fullSectDist;	//정류소간 거리
+	private String dataTm;	//제공시간
 }
