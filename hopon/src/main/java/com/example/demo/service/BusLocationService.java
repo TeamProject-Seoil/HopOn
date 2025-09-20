@@ -50,7 +50,7 @@ public class BusLocationService {
                     node.path("vehId").asText(),
                     node.path("plainNo").asText(),
                     node.path("busType").asText(),
-                    node.path("nextStId").asText(),
+                    node.path("lastStnId").asText(),
                     node.path("congetion").asText(),
                     node.path("gpsX").asDouble(),
                     node.path("gpsY").asDouble(),
