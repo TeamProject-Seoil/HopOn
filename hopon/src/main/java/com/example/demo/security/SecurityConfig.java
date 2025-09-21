@@ -72,7 +72,8 @@ public class SecurityConfig {
                         "/auth/email/send-code",
                         "/auth/email/verify-code",
                         "/auth/find-id-after-verify",
-                        "/auth/reset-password-after-verify"
+                        "/auth/reset-password-after-verify",
+                        "/auth/verify-pw-user"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/auth/check").permitAll()
                 .requestMatchers("/admin/**").hasRole("ADMIN")

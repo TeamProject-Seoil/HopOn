@@ -73,6 +73,22 @@ public class EmailVerificationService {
         repo.save(ev);
     }
 
+    @Transactional(readOnly = true)
+    public void ensureVerified(Long verificationId, String email, String purpose) {
+        String norm = email.trim().toLowerCase();
+        var ev = repo.findByIdAndEmailAndPurpose(verificationId, norm, purpose)
+                .orElseThrow(() -> new IllegalArgumentException("유효한 이메일 인증이 없습니다."));
+
+        if (!ev.isVerified()) {
+            throw new IllegalStateException("이메일 인증이 완료되지 않았습니다.");
+        }
+        if (LocalDateTime.now().isAfter(ev.getExpiresAt())) {
+            throw new IllegalStateException("이메일 인증이 만료되었습니다.");
+        }
+        // ❌ 여기서는 ev.setUsed(true) 안 함
+        // 그냥 검증만 하고 통과
+    }
+    
     @FunctionalInterface
     public interface EmailSender {
         void send(String to, String purpose, String code);

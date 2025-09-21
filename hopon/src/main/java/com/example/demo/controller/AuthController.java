@@ -241,7 +241,7 @@ public class AuthController {
         }
 
         Long vId = Long.parseLong(req.getVerificationId());
-        emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "RESET_PW");
+        emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "FIND_PW");
 
         var opt = userRepository.findByUseridAndEmail(req.getUserid(), req.getEmail());
         if (opt.isEmpty()) {
@@ -323,4 +323,37 @@ public class AuthController {
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return LocalDateTime.now().isAfter(capEnd);
     }
+    
+    /** 비밀번호 찾기: 아이디+이메일 존재 확인 (+ 이메일 인증 사용처리) */
+    @PostMapping("/verify-pw-user")
+    public ResponseEntity<?> verifyPwUser(@RequestBody Map<String, Object> req) {
+        String userid = (String) req.get("userid");
+        String email  = (String) req.get("email");
+        Object vIdObj = req.get("verificationId");
+
+        if (userid == null || email == null || vIdObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "MISSING_FIELDS"));
+        }
+
+        Long vId;
+        try {
+            vId = (vIdObj instanceof Number) ? ((Number)vIdObj).longValue() : Long.parseLong(vIdObj.toString());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_VERIFICATION_ID"));
+        }
+
+        log.info("입력 userid={}, email={}, verificationId={}", userid, email, vId);
+
+        emailVerificationService.ensureVerified(vId, email, "FIND_PW");
+
+        boolean exists = userRepository.existsByUseridIgnoreCaseAndEmailIgnoreCase(userid.trim(), email.trim());
+        
+        log.info("DB 조회 결과 exists={}", exists);
+
+        if (!exists) return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+
+    
 }
