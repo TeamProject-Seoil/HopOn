@@ -47,15 +47,19 @@ public class BusLocationService {
         if (items.isArray()) {
             for (JsonNode node : items) {
                 list.add(new BusLocationDto(
-                    node.path("vehId").asText(),
-                    node.path("plainNo").asText(),
-                    node.path("busType").asText(),
-                    node.path("lastStnId").asText(),
-                    node.path("congetion").asText(),
-                    node.path("gpsX").asDouble(),
-                    node.path("gpsY").asDouble(),
-                    node.path("sectOrd").asText(),
-                    node.path("stopFlag").asText()
+                        node.path("vehId").asText(),
+                        node.path("plainNo").asText(),
+                        node.path("busType").asText(),
+                        node.path("lastStnId").asText(),
+                        node.path("congetion").asText(),
+                        node.path("gpsX").asDouble(),
+                        node.path("gpsY").asDouble(),
+                        node.path("sectOrd").asText(),
+                        node.path("stopFlag").asText(),
+                        node.path("sectionId").asText(),
+                        node.path("sectDist").asDouble(),
+                        node.path("fullSectDist").asDouble(),
+                        node.path("dataTm").asText()
                 ));
             }
         }
