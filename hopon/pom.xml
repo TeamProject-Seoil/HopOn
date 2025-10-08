@@ -60,6 +60,23 @@
 			<artifactId>reactor-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+
+        <!-- Hibernate Spatial for Geometry/Point types -->
+        <!-- JPA가 'Point' 타입을 인식하고 처리할 수 있게 해주는 핵심 라이브러리 -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-spatial</artifactId>
+            <version>6.2.7.Final</version> <!-- 사용 중인 Spring Boot 버전에 맞는 버전을 확인하세요 -->
+        </dependency>
+
+        <!-- JTS Core for Geometry types like Point -->
+        <!-- !!!! 바로 이 라이브러리에 Point 클래스가 들어있습니다. !!!! -->
+        <dependency>
+            <groupId>org.locationtech.jts</groupId>
+            <artifactId>jts-core</artifactId>
+            <version>1.19.0</version>
+        </dependency>
+
 		
 		<!-- jdbc(이건 거의 안쓸듯하지만 일단 넣었음) -->
 		<dependency>
