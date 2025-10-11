@@ -7,10 +7,11 @@ import com.example.demo.dto.ChangePasswordRequest;
 import com.example.demo.dto.DeleteAccountRequest;
 import com.example.demo.entity.Role;
 import com.example.demo.entity.UserEntity;
+import com.example.demo.repository.DriverLicenseRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.repository.UserSessionRepository;
 import com.example.demo.security.PasswordPolicy;
-import com.example.demo.service.EmailVerificationService; // ✅ 추가
+import com.example.demo.service.EmailVerificationService;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +25,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URLConnection;
-import java.util.List;
 import java.util.Map;
 
 @RestController
@@ -34,7 +34,8 @@ public class UserController {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final UserSessionRepository sessionRepository;
-    private final EmailVerificationService emailVerificationService; // ✅ 주입
+    private final EmailVerificationService emailVerificationService;
+    private final DriverLicenseRepository driverLicenseRepository;
 
     @GetMapping("/me")
     public ResponseEntity<UserResponse> me(Authentication authentication) {
@@ -51,11 +52,11 @@ public class UserController {
         if (image == null) return ResponseEntity.notFound().build();
         String guessed = URLConnection.guessContentTypeFromStream(new ByteArrayInputStream(image));
         MediaType mt = (guessed != null) ? MediaType.parseMediaType(guessed) : MediaType.IMAGE_JPEG;
-        HttpHeaders headers = new HttpHeaders(); headers.setContentType(mt);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(mt);
         return new ResponseEntity<>(image, headers, HttpStatus.OK);
     }
 
-    // ───────── 개인정보 수정 ─────────
     @PatchMapping(value = "/me", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> updateMeMultipart(
             Authentication authentication,
@@ -68,23 +69,19 @@ public class UserController {
 
         boolean changed = false;
 
-        // ── 텍스트 필드
         if (req.getUsername()!=null && !req.getUsername().isBlank()) {
             u.setUsername(req.getUsername().trim());
             changed = true;
         }
 
-        // ✅ 이메일 변경: 실제 변경 시에만 인증/중복검사
         if (req.getEmail()!=null) {
             String newEmail = req.getEmail().trim().toLowerCase();
             String oldEmail = u.getEmail() == null ? null : u.getEmail().trim().toLowerCase();
 
             if (!newEmail.equals(oldEmail)) {
-                // 1) 중복 검사
                 if (userRepository.existsByEmail(newEmail)) {
                     return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_EMAIL"));
                 }
-                // 2) 인증 필수: verificationId 필요
                 if (req.getEmailVerificationId() == null || req.getEmailVerificationId().isBlank()) {
                     return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "EMAIL_VERIFICATION_REQUIRED"));
                 }
@@ -92,7 +89,6 @@ public class UserController {
                 try { vId = Long.parseLong(req.getEmailVerificationId()); }
                 catch (Exception e) { return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_VERIFICATION_ID")); }
 
-                // 3) 이메일 인증 확인 + 사용처리 (purpose = CHANGE_EMAIL)
                 emailVerificationService.ensureVerifiedAndMarkUsed(vId, newEmail, "CHANGE_EMAIL");
 
                 u.setEmail(newEmail);
@@ -105,7 +101,6 @@ public class UserController {
             changed = true;
         }
 
-        // ✅ 회사명 변경: 드라이버만 허용
         if (req.getCompany()!=null) {
             if (u.getRole() != Role.ROLE_DRIVER) {
                 return ResponseEntity.status(403).body(Map.of("ok", false, "reason", "COMPANY_CHANGE_ONLY_FOR_DRIVER"));
@@ -114,7 +109,6 @@ public class UserController {
             changed = true;
         }
 
-        // ── 사진 처리 (상호 배타)
         final long MAX_IMAGE_BYTES = 2L * 1024 * 1024; // 2MB
         boolean remove = Boolean.TRUE.equals(req.getRemoveProfileImage());
         boolean hasFile = (file != null && !file.isEmpty());
@@ -139,7 +133,6 @@ public class UserController {
         return ResponseEntity.ok(toResponse(u));
     }
 
-    // ───────── 비밀번호 변경 ─────────
     @PostMapping("/me/password")
     public ResponseEntity<?> changePassword(Authentication authentication,
                                             @RequestBody @Validated ChangePasswordRequest req) {
@@ -149,8 +142,7 @@ public class UserController {
         if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
         }
-        
-        // ▼ 비밀번호 정책 검사
+
         String reason = PasswordPolicy.validateAndReason(req.getNewPassword());
         if (reason != null) {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "PASSWORD_POLICY_VIOLATION", "message", reason));
@@ -169,8 +161,28 @@ public class UserController {
         return ResponseEntity.ok(Map.of("ok", true));
     }
 
-    // 헬퍼
+    @DeleteMapping("/me")
+    @Transactional
+    public ResponseEntity<?> deleteMe(Authentication authentication,
+                                      @RequestBody @Validated DeleteAccountRequest req) {
+        String userid = (String) authentication.getPrincipal();
+        var u = userRepository.findByUserid(userid).orElseThrow();
+
+        if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
+            return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
+        }
+
+        var active = sessionRepository.findByUserAndRevokedIsFalse(u);
+        for (var s : active) s.setRevoked(true);
+        if (!active.isEmpty()) sessionRepository.saveAll(active);
+
+        userRepository.delete(u);
+
+        return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
+    }
+
     private UserResponse toResponse(UserEntity u) {
+        boolean hasDriverLicense = driverLicenseRepository.findByUser_UserNum(u.getUserNum()).isPresent();
         return UserResponse.builder()
                 .userNum(u.getUserNum())
                 .userid(u.getUserid())
@@ -181,31 +193,7 @@ public class UserController {
                 .hasProfileImage(u.getProfileImage()!=null)
                 .company(u.getCompany())
                 .approvalStatus(u.getApprovalStatus())
-                .hasDriverLicenseFile(u.getDriverLicenseFile()!=null)
+                .hasDriverLicenseFile(hasDriverLicense) // 클라 호환용
                 .build();
-    }
-    
- // ───────── 계정 탈퇴 (비밀번호만 확인) ─────────
-    @DeleteMapping("/me")
-    @Transactional
-    public ResponseEntity<?> deleteMe(Authentication authentication,
-                                      @RequestBody @Validated DeleteAccountRequest req) {
-        String userid = (String) authentication.getPrincipal();
-        var u = userRepository.findByUserid(userid).orElseThrow();
-
-        // 1) 비밀번호 확인
-        if (!passwordEncoder.matches(req.getCurrentPassword(), u.getPassword())) {
-            return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
-        }
-
-        // 2) (선택) 활성 세션 revoke — 즉시 리프레시 토큰 무효화
-        var active = sessionRepository.findByUserAndRevokedIsFalse(u);
-        for (var s : active) s.setRevoked(true);
-        if (!active.isEmpty()) sessionRepository.saveAll(active);
-
-        // 3) 계정 삭제 (DB에 FK ON DELETE CASCADE면 세션도 함께 정리됨)
-        userRepository.delete(u);
-
-        return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
     }
 }

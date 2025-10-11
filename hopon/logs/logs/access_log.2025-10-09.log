@@ -1,0 +1,13 @@
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:05:30 +0900] "POST /auth/register HTTP/1.1" 400 102
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:06:57 +0900] "POST /auth/email/send-code HTTP/1.1" 200 65
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:08:03 +0900] "POST /auth/email/verify-code HTTP/1.1" 200 43
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:08:30 +0900] "POST /auth/register HTTP/1.1" 400 102
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:08:58 +0900] "POST /auth/register HTTP/1.1" 409 50
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:14:19 +0900] "POST /auth/email/send-code HTTP/1.1" 200 65
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:14:55 +0900] "POST /auth/email/verify-code HTTP/1.1" 200 43
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:15:24 +0900] "POST /auth/register HTTP/1.1" 400 146
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:15:46 +0900] "POST /auth/register HTTP/1.1" 409 105
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:18:48 +0900] "POST /auth/email/send-code HTTP/1.1" 200 65
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:19:07 +0900] "POST /auth/email/verify-code HTTP/1.1" 200 43
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:19:21 +0900] "POST /auth/register HTTP/1.1" 201 65
+0:0:0:0:0:0:0:1 - - [09/Oct/2025:00:21:16 +0900] "POST /auth/login HTTP/1.1" 403 -

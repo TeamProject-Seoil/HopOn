@@ -2,8 +2,13 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.RegisterRequest;
-import com.example.demo.entity.*;
+import com.example.demo.entity.ApprovalStatus;
+import com.example.demo.entity.DriverLicenseEntity;
+import com.example.demo.entity.Role;
+import com.example.demo.entity.UserEntity;
+import com.example.demo.repository.DriverLicenseRepository;
 import com.example.demo.repository.UserRepository;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -12,69 +17,153 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 
 @Service
 @RequiredArgsConstructor
 public class UserService {
+
     private final UserRepository userRepository;
+    private final DriverLicenseRepository driverLicenseRepository;
     private final PasswordEncoder passwordEncoder;
 
+    /** 일반 사용자 회원가입 (프로필만) */
     @Transactional
-    public void registerWithProfile(RegisterRequest req, MultipartFile profile, MultipartFile license) {
+    public void registerUserWithProfile(RegisterRequest req, MultipartFile profile) {
         validateDup(req);
 
-        byte[] imgBytes;
-        try {
-            if (profile != null && !profile.isEmpty()) {
-                imgBytes = profile.getBytes();
-            } else {
-                var res = new ClassPathResource("static/profile_image/default_profile_image.jpg");
-                try (InputStream is = res.getInputStream()) { imgBytes = is.readAllBytes(); }
-            }
-        } catch (Exception e) { throw new RuntimeException("프로필 이미지 처리 실패", e); }
+        String normUserid = req.getUserid().trim();
+        String normEmail  = req.getEmail().trim().toLowerCase();
 
-        Role role = switch (req.getClientType()) {
-            case "USER_APP"   -> Role.ROLE_USER;
-            case "DRIVER_APP" -> Role.ROLE_DRIVER;
-            default -> throw new IllegalArgumentException("허용되지 않은 clientType: " + req.getClientType());
-        };
-        ApprovalStatus approval = "DRIVER_APP".equals(req.getClientType())
-                ? ApprovalStatus.PENDING
-                : ApprovalStatus.APPROVED;
-
-        byte[] licenseBytes = null;
-        try {
-            if ("DRIVER_APP".equals(req.getClientType()) && license != null && !license.isEmpty()) {
-                licenseBytes = license.getBytes();
-            }
-        } catch (Exception e) { throw new RuntimeException("면허 파일 처리 실패", e); }
+        byte[] imgBytes = readProfileOrDefault(profile);
 
         var user = UserEntity.builder()
-                .userid(req.getUserid())
+                .userid(normUserid)
                 .username(req.getUsername())
                 .password(passwordEncoder.encode(req.getPassword()))
-                .email(req.getEmail())
+                .email(normEmail)
                 .tel(req.getTel())
-                .company("DRIVER_APP".equals(req.getClientType()) ? req.getCompany() : null)
                 .profileImage(imgBytes)
-                .driverLicenseFile(licenseBytes)
-                .role(role)
-                .approvalStatus(approval)
+                .role(Role.ROLE_USER)
+                .approvalStatus(ApprovalStatus.APPROVED)
                 .build();
+
         userRepository.save(user);
     }
 
-    private void validateDup(RegisterRequest req) {
-        if (userRepository.existsByUserid(req.getUserid()))
-            throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
-        if (req.getEmail()!=null && userRepository.existsByEmail(req.getEmail()))
-            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+    /** 드라이버 회원가입 (프로필 + 면허 정보/사진 동시 저장) */
+    @Transactional
+    public void registerDriverWithLicense(RegisterRequest req,
+                                          MultipartFile profile,
+                                          MultipartFile licensePhoto) {
+        validateDup(req);
+
+        String normUserid = req.getUserid().trim();
+        String normEmail  = req.getEmail().trim().toLowerCase();
+
+        // 면허번호 정규화/검증/중복
+        String licenseNo = normalizeLicenseNo(req.getLicenseNumber());
+        if (licenseNo == null || licenseNo.isBlank())
+            throw new IllegalArgumentException("자격증 번호를 입력하세요.");
+        if (licenseNo.length() > 50)
+            throw new IllegalArgumentException("자격증 번호가 너무 깁니다.");
+        if (driverLicenseRepository.existsByLicenseNumber(licenseNo))
+            throw new IllegalArgumentException("이미 등록된 자격증 번호입니다.");
+
+        LocalDate acquired = parseAcquiredDate(req.getAcquiredDate());
+
+        if (req.getCompany() == null || req.getCompany().isBlank())
+            throw new IllegalArgumentException("회사명을 입력하세요.");
+
+        byte[] imgBytes   = readProfileOrDefault(profile);
+        byte[] licenseImg = readLicenseImage(licensePhoto);
+
+        var user = UserEntity.builder()
+                .userid(normUserid)
+                .username(req.getUsername())
+                .password(passwordEncoder.encode(req.getPassword()))
+                .email(normEmail)
+                .tel(req.getTel())
+                .company(req.getCompany())
+                .profileImage(imgBytes)
+                .role(Role.ROLE_DRIVER)
+                .approvalStatus(ApprovalStatus.PENDING) // 관리자 승인 대기
+                .build();
+        userRepository.save(user);
+
+        var dl = DriverLicenseEntity.builder()
+                .user(user)
+                .licenseNumber(licenseNo)
+                .acquiredDate(acquired)
+                .licenseImage(licenseImg)
+                .build();
+        driverLicenseRepository.save(dl);
     }
 
-    /** 이름+이메일로 아이디 찾기 */
+    /** 이름+이메일로 아이디 찾기 (AuthController에서 사용) */
+    @Transactional(readOnly = true)
     public String findUseridByNameEmail(String username, String email) {
         return userRepository.findByUsernameAndEmail(username, email)
                 .map(UserEntity::getUserid)
                 .orElse(null);
+    }
+
+    // ===== 내부 유틸 =====
+    private void validateDup(RegisterRequest req) {
+        String normUserid = req.getUserid().trim();
+        String normEmail  = req.getEmail() == null ? null : req.getEmail().trim().toLowerCase();
+
+        if (userRepository.existsByUserid(normUserid))
+            throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
+        if (normEmail != null && userRepository.existsByEmail(normEmail))
+            throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
+    }
+
+    private String normalizeLicenseNo(String s) {
+        return s == null ? null : s.replaceAll("\\s|-", "").trim();
+    }
+
+    private LocalDate parseAcquiredDate(String s) {
+        if (s == null || s.isBlank())
+            throw new IllegalArgumentException("자격취득일을 입력하세요.");
+        try {
+            LocalDate d = LocalDate.parse(s); // yyyy-MM-dd
+            if (d.isAfter(LocalDate.now()))
+                throw new IllegalArgumentException("자격취득일은 미래일 수 없습니다.");
+            return d;
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("자격취득일 형식이 올바르지 않습니다(yyyy-MM-dd).");
+        }
+    }
+
+    private byte[] readProfileOrDefault(MultipartFile profile) {
+        try {
+            if (profile != null && !profile.isEmpty()) {
+                return profile.getBytes();
+            }
+            var res = new ClassPathResource("static/profile_image/default_profile_image.jpg");
+            try (InputStream is = res.getInputStream()) { return is.readAllBytes(); }
+        } catch (Exception e) {
+            throw new RuntimeException("프로필 이미지 처리 실패", e);
+        }
+    }
+
+    private byte[] readLicenseImage(MultipartFile licensePhoto) {
+        try {
+            if (licensePhoto == null || licensePhoto.isEmpty())
+                throw new IllegalArgumentException("면허 사진을 업로드하세요.");
+            String ct = licensePhoto.getContentType();
+            if (ct == null || !ct.startsWith("image/"))
+                throw new IllegalArgumentException("면허 사진은 이미지 파일만 허용됩니다.");
+            long max = 10L * 1024 * 1024;
+            if (licensePhoto.getSize() > max)
+                throw new IllegalArgumentException("면허 사진은 최대 10MB까지 업로드 가능합니다.");
+            return licensePhoto.getBytes();
+        } catch (IllegalArgumentException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new RuntimeException("면허 사진 처리 실패", e);
+        }
     }
 }
