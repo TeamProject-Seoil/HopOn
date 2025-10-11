@@ -1,9 +1,9 @@
 package com.example.demo.dto;
+import lombok.*;
 
-import lombok.Data;
-
-@Data
-public class ReservationRequestDto {
+@Getter @Setter @NoArgsConstructor @AllArgsConstructor @Builder
+public class FavoriteResponse {
+    private Long id;
     private String routeId;
     private String direction;
     private String boardStopId;
