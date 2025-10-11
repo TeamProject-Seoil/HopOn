@@ -54,10 +54,11 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("useridTaken", useridTaken, "emailTaken", emailTaken));
     }
 
+    // ✅ 면허 파일은 더 이상 회원가입에서 받지 않음 (DriverLicense API로 분리)
     @PostMapping(value = "/register", consumes = {"multipart/form-data"})
     public ResponseEntity<?> register(@RequestPart("data") @Validated RegisterRequest req,
                                       @RequestPart(value = "file", required = false) MultipartFile file,
-                                      @RequestPart(value = "license", required = false) MultipartFile license) {
+                                      @RequestPart(value = "licensePhoto", required = false) MultipartFile licensePhoto) {
         if (userRepository.existsByUserid(req.getUserid()))
             return ResponseEntity.status(409).body(Map.of("ok", false, "reason", "DUPLICATE_USERID"));
         if (req.getEmail() != null && userRepository.existsByEmail(req.getEmail()))
@@ -66,28 +67,30 @@ public class AuthController {
         Long vId = parseVerificationId(req.getVerificationId());
         emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "REGISTER");
 
-        //▼ 비밀번호 정책 검사
+        // ▼ 비밀번호 정책 검사
         String reason = PasswordPolicy.validateAndReason(req.getPassword());
         if (reason != null) {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "PASSWORD_POLICY_VIOLATION", "message", reason));
         }
-        
+
         if ("DRIVER_APP".equals(req.getClientType())) {
+            // 회사명 및 면허 필드/사진 필수
             if (req.getCompany() == null || req.getCompany().isBlank())
                 return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "COMPANY_REQUIRED_FOR_DRIVER"));
-            if (license == null || license.isEmpty())
-                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "LICENSE_REQUIRED_FOR_DRIVER"));
-            if (license.getSize() > 10L * 1024 * 1024)
-                return ResponseEntity.status(413).body(Map.of("ok", false, "reason", "LICENSE_TOO_LARGE"));
-            String ct = license.getContentType();
-            if (ct == null || !(ct.startsWith("image/") || "application/pdf".equals(ct)))
-                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_LICENSE_TYPE"));
+            if (req.getLicenseNumber() == null || req.getLicenseNumber().isBlank())
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "LICENSE_NUMBER_REQUIRED"));
+            if (req.getAcquiredDate() == null || req.getAcquiredDate().isBlank())
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "ACQUIRED_DATE_REQUIRED"));
+            if (licensePhoto == null || licensePhoto.isEmpty())
+                return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "LICENSE_PHOTO_REQUIRED"));
+
+            userService.registerDriverWithLicense(req, file, licensePhoto);
         } else {
-            license = null;
+            // 일반 사용자
             req.setCompany(null);
+            userService.registerUserWithProfile(req, file);
         }
 
-        userService.registerWithProfile(req, file, license);
         return ResponseEntity.status(201).body(Map.of("ok", true, "message", "REGISTERED", "userid", req.getUserid()));
     }
 
@@ -323,7 +326,7 @@ public class AuthController {
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return LocalDateTime.now().isAfter(capEnd);
     }
-    
+
     /** 비밀번호 찾기: 아이디+이메일 존재 확인 (+ 이메일 인증 사용처리) */
     @PostMapping("/verify-pw-user")
     public ResponseEntity<?> verifyPwUser(@RequestBody Map<String, Object> req) {
@@ -347,13 +350,10 @@ public class AuthController {
         emailVerificationService.ensureVerified(vId, email, "FIND_PW");
 
         boolean exists = userRepository.existsByUseridIgnoreCaseAndEmailIgnoreCase(userid.trim(), email.trim());
-        
+
         log.info("DB 조회 결과 exists={}", exists);
 
         if (!exists) return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
         return ResponseEntity.ok(Map.of("ok", true));
     }
-
-
-    
 }
