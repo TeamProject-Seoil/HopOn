@@ -25,6 +25,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URLConnection;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 @RestController
@@ -41,7 +42,14 @@ public class UserController {
     public ResponseEntity<UserResponse> me(Authentication authentication) {
         String userid = (String) authentication.getPrincipal();
         UserEntity u = userRepository.findByUserid(userid).orElseThrow();
-        return ResponseEntity.ok(toResponse(u));
+
+        // ⭐ 정책: 최근 접속 = lastLoginAt과 lastRefreshAt 중 최신값
+        LocalDateTime last = u.getLastLoginAt();
+        if (u.getLastRefreshAt() != null && (last == null || u.getLastRefreshAt().isAfter(last))) {
+            last = u.getLastRefreshAt();
+        }
+
+        return ResponseEntity.ok(toResponse(u, last));
     }
 
     @GetMapping("/me/profile-image")
@@ -130,7 +138,13 @@ public class UserController {
         if (!changed) return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "NO_FIELDS"));
 
         userRepository.save(u);
-        return ResponseEntity.ok(toResponse(u));
+
+        // 업데이트 후에도 최신 last 계산해서 내려줌
+        LocalDateTime last = u.getLastLoginAt();
+        if (u.getLastRefreshAt() != null && (last == null || u.getLastRefreshAt().isAfter(last))) {
+            last = u.getLastRefreshAt();
+        }
+        return ResponseEntity.ok(toResponse(u, last));
     }
 
     @PostMapping("/me/password")
@@ -181,7 +195,8 @@ public class UserController {
         return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
     }
 
-    private UserResponse toResponse(UserEntity u) {
+    // ▼ last(최근 접속/활동 시각)을 받아 응답으로 포함
+    private UserResponse toResponse(UserEntity u, LocalDateTime last) {
         boolean hasDriverLicense = driverLicenseRepository.findByUser_UserNum(u.getUserNum()).isPresent();
         return UserResponse.builder()
                 .userNum(u.getUserNum())
@@ -194,6 +209,7 @@ public class UserController {
                 .company(u.getCompany())
                 .approvalStatus(u.getApprovalStatus())
                 .hasDriverLicenseFile(hasDriverLicense) // 클라 호환용
+                .lastLoginAtIso(UserResponse.toIsoOrNull(last)) // ⭐ 추가
                 .build();
     }
 }

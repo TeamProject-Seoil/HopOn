@@ -143,6 +143,12 @@ public class AuthController {
         String refresh = tokenProvider.generateRefreshToken(user.getUserid(), role, clientType);
         upsertSession(user, clientType, deviceId, refresh);
 
+        // ✅ 추가: 로그인/활동 시각 기록
+        var now = LocalDateTime.now();
+        user.setLastLoginAt(now);
+        user.setLastRefreshAt(now); // 로그인 자체도 최근 활동에 해당
+        userRepository.save(user);
+
         log.info("로그인 성공: userid={}, role={}, app={}, device={}", req.getUserid(), role, clientType, deviceId);
         return ResponseEntity.ok(new AuthResponse(access, refresh, "Bearer", role));
     }
@@ -185,6 +191,10 @@ public class AuthController {
         String newAccess  = tokenProvider.generateAccessToken(userid, role, clientType);
         String newRefresh = tokenProvider.generateRefreshToken(userid, role, clientType);
         rotateSession(session, newRefresh);
+
+        // ✅ 추가: 리프레시 시 최근 활동 시각 기록 (로그인 시각은 건드리지 않음)
+        user.setLastRefreshAt(LocalDateTime.now());
+        userRepository.save(user);
 
         return ResponseEntity.ok(new AuthResponse(newAccess, newRefresh, "Bearer", role));
     }

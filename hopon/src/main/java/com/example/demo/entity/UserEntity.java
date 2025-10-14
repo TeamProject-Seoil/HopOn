@@ -51,4 +51,10 @@ public class UserEntity {
     // DB DEFAULT CURRENT_TIMESTAMP 읽기 전용 매핑
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
+    
+    @Column(name = "last_login_at")
+    private LocalDateTime lastLoginAt;     // 수동 로그인 시각
+
+    @Column(name = "last_refresh_at")
+    private LocalDateTime lastRefreshAt;   // (선택) 토큰 리프레시 시각
 }
