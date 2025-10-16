@@ -186,14 +186,27 @@ public class UserController {
             return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
         }
 
-        var active = sessionRepository.findByUserAndRevokedIsFalse(u);
-        for (var s : active) s.setRevoked(true);
-        if (!active.isEmpty()) sessionRepository.saveAll(active);
+        try {
+            // 세션 revoke/save 불필요 — CASCADE가 모두 제거
+            // 하드 삭제 (둘 중 편한 것 사용)
+            // int affected = userRepository.hardDeleteByUserNum(u.getUserNum());
+            int affected = userRepository.hardDeleteByUserid(userid);
 
-        userRepository.delete(u);
+            if (affected == 0) {
+                return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
+            }
+            return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
 
-        return ResponseEntity.ok(Map.of("ok", true, "message", "ACCOUNT_DELETED"));
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            var cause = org.springframework.core.NestedExceptionUtils.getMostSpecificCause(ex);
+            return ResponseEntity.status(409).body(Map.of(
+                "ok", false,
+                "reason", "FK_CONSTRAINT",
+                "detail", (cause != null ? cause.getMessage() : "Data integrity violation")
+            ));
+        }
     }
+
 
     // ▼ last(최근 접속/활동 시각)을 받아 응답으로 포함
     private UserResponse toResponse(UserEntity u, LocalDateTime last) {

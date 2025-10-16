@@ -11,6 +11,7 @@ import com.example.demo.repository.UserRepository;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,10 +47,15 @@ public class UserService {
                 .tel(req.getTel())
                 .profileImage(imgBytes)
                 .role(Role.ROLE_USER)
-                .approvalStatus(ApprovalStatus.APPROVED)
+                .approvalStatus(ApprovalStatus.APPROVED) // 일반 유저는 즉시 승인
                 .build();
 
-        userRepository.save(user);
+        try {
+            userRepository.save(user);
+        } catch (DataIntegrityViolationException ex) {
+            // DB 유니크 경합 시 사용자 친화 에러
+            throw new IllegalArgumentException("이미 존재하는 사용자 ID/이메일입니다.");
+        }
     }
 
     /** 드라이버 회원가입 (프로필 + 면허 정보/사진 동시 저장) */
@@ -85,12 +91,17 @@ public class UserService {
                 .password(passwordEncoder.encode(req.getPassword()))
                 .email(normEmail)
                 .tel(req.getTel())
-                .company(req.getCompany())
+                .company(req.getCompany().trim()) // trim 추가
                 .profileImage(imgBytes)
                 .role(Role.ROLE_DRIVER)
                 .approvalStatus(ApprovalStatus.PENDING) // 관리자 승인 대기
                 .build();
-        userRepository.save(user);
+
+        try {
+            userRepository.save(user);
+        } catch (DataIntegrityViolationException ex) {
+            throw new IllegalArgumentException("이미 존재하는 사용자 ID/이메일입니다.");
+        }
 
         var dl = DriverLicenseEntity.builder()
                 .user(user)
@@ -98,7 +109,13 @@ public class UserService {
                 .acquiredDate(acquired)
                 .licenseImage(licenseImg)
                 .build();
-        driverLicenseRepository.save(dl);
+
+        try {
+            driverLicenseRepository.save(dl);
+        } catch (DataIntegrityViolationException ex) {
+            // license_number UNIQUE 충돌 등
+            throw new IllegalArgumentException("이미 등록된 자격증 번호입니다.");
+        }
     }
 
     /** 이름+이메일로 아이디 찾기 (AuthController에서 사용) */
@@ -114,9 +131,10 @@ public class UserService {
         String normUserid = req.getUserid().trim();
         String normEmail  = req.getEmail() == null ? null : req.getEmail().trim().toLowerCase();
 
-        if (userRepository.existsByUserid(normUserid))
+        // DB 콜레이션(utf8mb4_0900_ai_ci)이 대소문자 무시이므로 서버도 IgnoreCase로 통일
+        if (userRepository.existsByUseridIgnoreCase(normUserid))
             throw new IllegalArgumentException("이미 존재하는 사용자 ID입니다.");
-        if (normEmail != null && userRepository.existsByEmail(normEmail))
+        if (normEmail != null && userRepository.existsByEmailIgnoreCase(normEmail))
             throw new IllegalArgumentException("이미 존재하는 이메일입니다.");
     }
 
@@ -140,10 +158,19 @@ public class UserService {
     private byte[] readProfileOrDefault(MultipartFile profile) {
         try {
             if (profile != null && !profile.isEmpty()) {
+                String ct = profile.getContentType();
+                if (ct != null && !ct.startsWith("image/"))
+                    throw new IllegalArgumentException("프로필 이미지는 이미지 파일만 허용됩니다.");
+                long max = 2L * 1024 * 1024; // 2MB
+                if (profile.getSize() > max)
+                    throw new IllegalArgumentException("프로필 이미지는 최대 2MB까지 업로드 가능합니다.");
                 return profile.getBytes();
             }
+            // 기본 이미지
             var res = new ClassPathResource("static/profile_image/default_profile_image.jpg");
             try (InputStream is = res.getInputStream()) { return is.readAllBytes(); }
+        } catch (IllegalArgumentException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("프로필 이미지 처리 실패", e);
         }
@@ -156,7 +183,7 @@ public class UserService {
             String ct = licensePhoto.getContentType();
             if (ct == null || !ct.startsWith("image/"))
                 throw new IllegalArgumentException("면허 사진은 이미지 파일만 허용됩니다.");
-            long max = 10L * 1024 * 1024;
+            long max = 10L * 1024 * 1024; // 10MB
             if (licensePhoto.getSize() > max)
                 throw new IllegalArgumentException("면허 사진은 최대 10MB까지 업로드 가능합니다.");
             return licensePhoto.getBytes();
