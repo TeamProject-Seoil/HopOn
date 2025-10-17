@@ -77,7 +77,11 @@ public class UserService {
         if (driverLicenseRepository.existsByLicenseNumber(licenseNo))
             throw new IllegalArgumentException("이미 등록된 자격증 번호입니다.");
 
+        // 자격취득일/생년월일/면허상 이름 파싱
         LocalDate acquired = parseAcquiredDate(req.getAcquiredDate());
+        LocalDate birth    = parseBirthDate(req.getBirthDate());
+        String licenseName = (req.getLicenseName() == null) ? null : req.getLicenseName().trim();
+        if (licenseName != null && licenseName.isEmpty()) licenseName = null;
 
         if (req.getCompany() == null || req.getCompany().isBlank())
             throw new IllegalArgumentException("회사명을 입력하세요.");
@@ -91,7 +95,7 @@ public class UserService {
                 .password(passwordEncoder.encode(req.getPassword()))
                 .email(normEmail)
                 .tel(req.getTel())
-                .company(req.getCompany().trim()) // trim 추가
+                .company(req.getCompany().trim())
                 .profileImage(imgBytes)
                 .role(Role.ROLE_DRIVER)
                 .approvalStatus(ApprovalStatus.PENDING) // 관리자 승인 대기
@@ -107,6 +111,8 @@ public class UserService {
                 .user(user)
                 .licenseNumber(licenseNo)
                 .acquiredDate(acquired)
+                .birthDate(birth)           // ✅ 추가 필드 저장
+                .holderName(licenseName)    // ✅ 추가 필드 저장
                 .licenseImage(licenseImg)
                 .build();
 
@@ -152,6 +158,18 @@ public class UserService {
             return d;
         } catch (DateTimeParseException e) {
             throw new IllegalArgumentException("자격취득일 형식이 올바르지 않습니다(yyyy-MM-dd).");
+        }
+    }
+
+    private LocalDate parseBirthDate(String s) {
+        if (s == null || s.isBlank()) return null;
+        try {
+            LocalDate d = LocalDate.parse(s); // yyyy-MM-dd
+            if (d.isAfter(LocalDate.now()))
+                throw new IllegalArgumentException("생년월일은 미래일 수 없습니다.");
+            return d;
+        } catch (DateTimeParseException e) {
+            throw new IllegalArgumentException("생년월일 형식이 올바르지 않습니다(yyyy-MM-dd).");
         }
     }
 

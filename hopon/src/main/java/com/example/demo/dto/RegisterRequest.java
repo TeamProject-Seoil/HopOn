@@ -39,4 +39,8 @@ public class RegisterRequest {
 
     /** 취득일(yyyy-MM-dd) */
     private String acquiredDate;
+    
+    private String birthDate;     // yyyy-MM-dd
+    
+    private String licenseName;
 }

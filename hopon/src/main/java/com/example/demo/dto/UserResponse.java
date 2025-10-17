@@ -1,4 +1,3 @@
-// src/main/java/com/example/demo/dto/UserResponse.java
 package com.example.demo.dto;
 
 import com.example.demo.entity.ApprovalStatus;
@@ -7,7 +6,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 
 import java.time.*;
-import java.time.format.DateTimeFormatter;
 
 @Getter @Setter
 @NoArgsConstructor @AllArgsConstructor @Builder
@@ -28,9 +26,14 @@ public class UserResponse {
     @JsonProperty("lastLoginAt")
     private String lastLoginAtIso;            // ISO8601 "…Z"
 
-    // 유틸: LocalDateTime -> ISO_INSTANT (UTC) 문자열
+    /**
+     * LocalDateTime(서버 로컬시간, KST 가정) → Instant(UTC, Z) 문자열
+     * - DB에 KST 로 저장된 '로컬시각'을 KST 로 해석
+     * - 그 순간을 UTC 로 변환해 Z 표기 ISO 로 직렬화
+     */
     public static String toIsoOrNull(LocalDateTime t) {
         if (t == null) return null;
-        return t.atZone(ZoneId.of("UTC")).format(DateTimeFormatter.ISO_INSTANT);
+        ZoneId KST = ZoneId.of("Asia/Seoul");
+        return t.atZone(KST).toInstant().toString(); // 예: 2025-10-17T03:21:45Z
     }
 }

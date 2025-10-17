@@ -49,10 +49,13 @@ public class DriverLicenseController {
             @RequestPart("licenseNumber") String licenseNumber,
             @RequestPart("acquiredDate")
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate acquiredDate,
-            @RequestPart(value = "photo", required = false) MultipartFile photo
+            @RequestPart(value = "photo", required = false) MultipartFile photo,
+            @RequestPart(value = "birthDate", required = false)
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate birthDate,     // ✅
+            @RequestPart(value = "name", required = false) String holderName        // ✅
     ) {
         Long userNum = currentUserNum(authentication);
-        return driverLicenseService.upsert(userNum, licenseNumber, acquiredDate, photo);
+        return driverLicenseService.upsert(userNum, licenseNumber, acquiredDate, photo, birthDate, holderName);
     }
 
     @DeleteMapping

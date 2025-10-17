@@ -36,12 +36,16 @@ public class DriverLicenseService {
         return e.getLicenseImage();
     }
 
+ // src/main/java/com/example/demo/service/DriverLicenseService.java
+
     @Transactional
     public View upsert(Long userNum,
                        String licenseNumber,
                        LocalDate acquiredDate,
-                       MultipartFile photo) {
-
+                       MultipartFile photo,
+                       LocalDate birthDate,   // ✅
+                       String holderName      // ✅
+    ) {
         UserEntity user = userRepository.findById(userNum)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
@@ -49,9 +53,15 @@ public class DriverLicenseService {
         validateLicenseNumber(normalizedNo);
         validateAcquiredDate(acquiredDate);
 
-        byte[] photoBytes = readImageOrNull(photo); // null 가능
+        if (birthDate != null && birthDate.isAfter(LocalDate.now())) {
+            throw new IllegalArgumentException("생년월일은 미래일 수 없습니다.");
+        }
+        if (holderName != null && holderName.trim().isEmpty()) {
+            throw new IllegalArgumentException("이름을 올바르게 입력하세요.");
+        }
 
-        // 다른 사용자가 동일 면허번호 사용 중인지 검사
+        byte[] photoBytes = readImageOrNull(photo);
+
         if (driverLicenseRepository.existsByLicenseNumberAndUser_UserNumNot(normalizedNo, userNum)) {
             throw new IllegalStateException("이미 다른 계정에 등록된 자격증 번호입니다.");
         }
@@ -59,21 +69,18 @@ public class DriverLicenseService {
         DriverLicenseEntity entity = driverLicenseRepository.findByUser_UserNum(userNum)
                 .orElseGet(() -> DriverLicenseEntity.builder()
                         .user(user)
-                        .licenseNumber(normalizedNo)
-                        .acquiredDate(acquiredDate)
-                        .licenseImage(photoBytes)
                         .build());
 
-        // 업데이트
         entity.setLicenseNumber(normalizedNo);
         entity.setAcquiredDate(acquiredDate);
-        if (photoBytes != null) {
-            entity.setLicenseImage(photoBytes);
-        }
+        entity.setBirthDate(birthDate);     // ✅
+        entity.setHolderName(holderName);   // ✅
+        if (photoBytes != null) entity.setLicenseImage(photoBytes);
 
         DriverLicenseEntity saved = driverLicenseRepository.save(entity);
         return View.of(saved);
     }
+
 
     @Transactional
     public void deleteByUser(Long userNum) {
@@ -127,14 +134,18 @@ public class DriverLicenseService {
             Long id,
             String licenseNumber,
             LocalDate acquiredDate,
-            boolean hasPhoto
+            boolean hasPhoto,
+            LocalDate birthDate,   
+            String holderName  
     ) {
         public static View of(DriverLicenseEntity e) {
             return new View(
                     e.getLicenseId(),
                     e.getLicenseNumber(),
                     e.getAcquiredDate(),
-                    e.getLicenseImage() != null && e.getLicenseImage().length > 0
+                    e.getLicenseImage() != null && e.getLicenseImage().length > 0,
+                    e.getBirthDate(),
+                    e.getHolderName()
             );
         }
     }

@@ -32,6 +32,12 @@ public class DriverLicenseEntity {
     )
     private UserEntity user;
 
+    @Column(name = "birth_date")
+    private LocalDate birthDate;
+
+    @Column(name = "holder_name", length = 100)
+    private String holderName;
+    
     @Column(name = "license_number", nullable = false, length = 50, unique = true)
     private String licenseNumber;
 

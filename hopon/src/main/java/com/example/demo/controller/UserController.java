@@ -1,4 +1,3 @@
-// src/main/java/com/example/demo/controller/UserController.java
 package com.example.demo.controller;
 
 import com.example.demo.dto.UserResponse;
@@ -187,11 +186,7 @@ public class UserController {
         }
 
         try {
-            // 세션 revoke/save 불필요 — CASCADE가 모두 제거
-            // 하드 삭제 (둘 중 편한 것 사용)
-            // int affected = userRepository.hardDeleteByUserNum(u.getUserNum());
             int affected = userRepository.hardDeleteByUserid(userid);
-
             if (affected == 0) {
                 return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
             }
@@ -207,7 +202,6 @@ public class UserController {
         }
     }
 
-
     // ▼ last(최근 접속/활동 시각)을 받아 응답으로 포함
     private UserResponse toResponse(UserEntity u, LocalDateTime last) {
         boolean hasDriverLicense = driverLicenseRepository.findByUser_UserNum(u.getUserNum()).isPresent();
@@ -222,7 +216,7 @@ public class UserController {
                 .company(u.getCompany())
                 .approvalStatus(u.getApprovalStatus())
                 .hasDriverLicenseFile(hasDriverLicense) // 클라 호환용
-                .lastLoginAtIso(UserResponse.toIsoOrNull(last)) // ⭐ 추가
+                .lastLoginAtIso(UserResponse.toIsoOrNull(last)) // ⭐ KST→UTC(Z)로 정확히 직렬화
                 .build();
     }
 }
