@@ -1,0 +1,27 @@
+﻿# IntelliJ / Eclipse / Maven 공통
+.idea/
+*.iml
+.classpath
+.project
+.settings/
+out/
+target/
+build/
+.gradle/
+
+# 로그
+logs/
+**/logs/
+*.log
+
+# OS/JetBrains 캐시
+.DS_Store
+Thumbs.db
+shelf/
+workspace.xml
+httpRequests/
+dataSources/
+dataSources.local.xml
+
+# 환경파일
+local.properties
