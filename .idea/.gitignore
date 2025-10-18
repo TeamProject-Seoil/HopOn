@@ -1,8 +1,33 @@
-# 디폴트 무시된 파일
-/shelf/
-/workspace.xml
-# 에디터 기반 HTTP 클라이언트 요청
-/httpRequests/
-# Datasource local storage ignored files
-/dataSources/
-/dataSources.local.xml
+# Android / IntelliJ 공통 무시 항목
+.idea/
+*.iml
+.gradle/
+build/
+local.properties
+captures/
+.DS_Store
+
+# Generated files
+*.apk
+*.ap_
+*.dex
+*.class
+*.jar
+
+# Gradle cache
+.gradle/
+**/build/
+
+# 로그 파일
+*.log
+
+# OS 별 캐시
+Thumbs.db
+ehthumbs.db
+
+# JetBrains IDE 설정 (공통)
+shelf/
+workspace.xml
+httpRequests/
+dataSources/
+dataSources.local.xml
