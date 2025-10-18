@@ -28,10 +28,11 @@ public class FavoriteController {
         return ResponseEntity.ok(favoriteService.add(user, req));
     }
 
-    @GetMapping("/top3")
-    public ResponseEntity<List<FavoriteResponse>> top3(Authentication authentication) {
+    //즐겨찾기 조회
+    @GetMapping
+    public ResponseEntity<List<FavoriteResponse>> listAll(Authentication authentication) {
         UserEntity user = authUserResolver.requireUser(authentication);
-        return ResponseEntity.ok(favoriteService.top3(user));
+        return ResponseEntity.ok(favoriteService.listAll(user));
     }
 
     @DeleteMapping("/{id}")

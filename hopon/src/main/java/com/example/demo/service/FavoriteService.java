@@ -15,15 +15,15 @@ import static org.springframework.http.HttpStatus.*;
 
 import java.util.List;
 
+// FavoriteService.java
 @Service
 @RequiredArgsConstructor
 public class FavoriteService {
-
     private final FavoriteRepository favoriteRepository;
 
     @Transactional
     public FavoriteResponse add(UserEntity user, FavoriteCreateRequest dto) {
-        // 중복 방지
+        // ✅ 중복 방지만 유지
         boolean dup = favoriteRepository.existsByUserAndRouteIdAndBoardStopIdAndDestStopId(
                 user, dto.getRouteId(), dto.getBoardStopId(), dto.getDestStopId());
         if (dup) throw new ResponseStatusException(CONFLICT, "DUPLICATE_FAVORITE");
@@ -45,9 +45,10 @@ public class FavoriteService {
         return toRes(saved);
     }
 
+    // 🔥 top3 → all 로 변경
     @Transactional(readOnly = true)
-    public List<FavoriteResponse> top3(UserEntity user) {
-        return favoriteRepository.findTop3ByUserOrderByUpdatedAtDesc(user)
+    public List<FavoriteResponse> listAll(UserEntity user) {
+        return favoriteRepository.findByUserOrderByUpdatedAtDesc(user)
                 .stream().map(this::toRes).toList();
     }
 

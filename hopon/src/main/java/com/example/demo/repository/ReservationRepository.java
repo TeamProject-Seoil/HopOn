@@ -48,6 +48,6 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
     Optional<ReservationEntity> findTopByUser_UserNumAndStatusOrderByUpdatedAtDesc(
             Long userNum, ReservationStatus status);
 
-    // ✅ 최근 3건 조회 (ReservationQueryService에서 사용)
-    List<ReservationEntity> findTop3ByUserOrderByUpdatedAtDesc(UserEntity user);
+    // ✅ 전체 예약 내역 조회(최신순)
+    List<ReservationEntity> findByUserOrderByUpdatedAtDesc(UserEntity user);
 }

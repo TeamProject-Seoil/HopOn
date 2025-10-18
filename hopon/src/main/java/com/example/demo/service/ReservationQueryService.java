@@ -15,12 +15,10 @@ import java.util.List;
 public class ReservationQueryService {
     private final ReservationRepository reservationRepository;
 
-
-
-    @Transactional(readOnly = true)
-    public List<ReservationEntity> recentTop3(UserEntity user) {
-        return reservationRepository.findTop3ByUserOrderByUpdatedAtDesc(user);
-    }
+//    @Transactional(readOnly = true)
+//    public List<ReservationEntity> recentTop3(UserEntity user) {
+//        return reservationRepository.findTop3ByUserOrderByUpdatedAtDesc(user);
+//    }
 
     @Transactional(readOnly = true)
     public ReservationEntity getActiveReservationFromDb(Long userNum) {

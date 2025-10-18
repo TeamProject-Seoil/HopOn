@@ -62,6 +62,11 @@ public class ReservationService {
                 .orElse(null);
     }
 
+    @Transactional(readOnly = true)
+    public List<ReservationEntity> getAll(UserEntity user) {
+        return reservationRepository.findByUserOrderByUpdatedAtDesc(user);
+    }
+
 
     // 예약 전체 조회 (관리자용)
     public List<ReservationEntity> getAllReservations() {

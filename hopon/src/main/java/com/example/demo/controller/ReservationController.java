@@ -1,6 +1,7 @@
 // ReservationController.java
 package com.example.demo.controller;
 
+import com.example.demo.dto.ReservationDto;
 import com.example.demo.dto.ReservationRequestDto;
 import com.example.demo.entity.ReservationEntity;
 import com.example.demo.entity.UserEntity;
@@ -10,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/reservations")    // 예약 만들기 + 활성 예약 조회
@@ -21,24 +24,32 @@ public class ReservationController {
 
     // 예약 생성
     @PostMapping
-    public ResponseEntity<ReservationEntity> createReservation(
+    public ResponseEntity<ReservationDto> createReservation(
             Authentication authentication,
             @RequestBody ReservationRequestDto dto) {
 
-        // ✅ 인증 사용자 1줄 획득 (유효성/예외 처리 내부에서 수행)
         UserEntity user = authUserResolver.requireUser(authentication);
-
         ReservationEntity saved = reservationService.createReservation(user, dto);
-        return ResponseEntity.ok(saved);
+        return ResponseEntity.ok(ReservationDto.from(saved));
     }
 
     // 활성 예약 1건 조회
     @GetMapping("/active")
-    public ResponseEntity<ReservationEntity> getActiveReservation(Authentication authentication) {
-        // ✅ 인증 사용자 1줄 획득
+    public ResponseEntity<ReservationDto> getActiveReservation(Authentication authentication) {
         UserEntity user = authUserResolver.requireUser(authentication);
-
         ReservationEntity active = reservationService.getActiveReservationFromDb(user.getUserNum());
-        return (active == null) ? ResponseEntity.noContent().build() : ResponseEntity.ok(active);
+        return (active == null)
+                ? ResponseEntity.noContent().build()
+                : ResponseEntity.ok(ReservationDto.from(active));
+    }
+
+    //최근 예약 조회
+    @GetMapping
+    public ResponseEntity<List<ReservationDto>> listAll(Authentication authentication) {
+        UserEntity user = authUserResolver.requireUser(authentication);
+        var list = reservationService.getAll(user).stream()
+                .map(ReservationDto::from)
+                .toList();
+        return ResponseEntity.ok(list);
     }
 }
