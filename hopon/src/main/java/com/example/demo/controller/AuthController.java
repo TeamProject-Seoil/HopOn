@@ -8,6 +8,7 @@ import com.example.demo.security.JwtTokenProvider;
 import com.example.demo.security.PasswordPolicy;
 import com.example.demo.service.EmailVerificationService;
 import com.example.demo.service.UserService;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -19,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -54,7 +56,7 @@ public class AuthController {
         return ResponseEntity.ok(Map.of("useridTaken", useridTaken, "emailTaken", emailTaken));
     }
 
-    // ✅ 면허 파일은 더 이상 회원가입에서 받지 않음 (DriverLicense API로 분리)
+    // ✅ 회원가입(운전자/일반 분리 로직 유지)
     @PostMapping(value = "/register", consumes = {"multipart/form-data"})
     public ResponseEntity<?> register(@RequestPart("data") @Validated RegisterRequest req,
                                       @RequestPart(value = "file", required = false) MultipartFile file,
@@ -67,14 +69,12 @@ public class AuthController {
         Long vId = parseVerificationId(req.getVerificationId());
         emailVerificationService.ensureVerifiedAndMarkUsed(vId, req.getEmail(), "REGISTER");
 
-        // ▼ 비밀번호 정책 검사
         String reason = PasswordPolicy.validateAndReason(req.getPassword());
         if (reason != null) {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "PASSWORD_POLICY_VIOLATION", "message", reason));
         }
 
         if ("DRIVER_APP".equals(req.getClientType())) {
-            // 회사명 및 면허 필드/사진 필수
             if (req.getCompany() == null || req.getCompany().isBlank())
                 return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "COMPANY_REQUIRED_FOR_DRIVER"));
             if (req.getLicenseNumber() == null || req.getLicenseNumber().isBlank())
@@ -86,7 +86,6 @@ public class AuthController {
 
             userService.registerDriverWithLicense(req, file, licensePhoto);
         } else {
-            // 일반 사용자
             req.setCompany(null);
             userService.registerUserWithProfile(req, file);
         }
@@ -143,10 +142,9 @@ public class AuthController {
         String refresh = tokenProvider.generateRefreshToken(user.getUserid(), role, clientType);
         upsertSession(user, clientType, deviceId, refresh);
 
-        // ✅ 추가: 로그인/활동 시각 기록
         var now = LocalDateTime.now();
         user.setLastLoginAt(now);
-        user.setLastRefreshAt(now); // 로그인 자체도 최근 활동에 해당
+        user.setLastRefreshAt(now);
         userRepository.save(user);
 
         log.info("로그인 성공: userid={}, role={}, app={}, device={}", req.getUserid(), role, clientType, deviceId);
@@ -192,7 +190,6 @@ public class AuthController {
         String newRefresh = tokenProvider.generateRefreshToken(userid, role, clientType);
         rotateSession(session, newRefresh);
 
-        // ✅ 추가: 리프레시 시 최근 활동 시각 기록 (로그인 시각은 건드리지 않음)
         user.setLastRefreshAt(LocalDateTime.now());
         userRepository.save(user);
 
@@ -247,7 +244,6 @@ public class AuthController {
     /** 비밀번호 재설정: 아이디+이메일 (+ 이메일 인증 사용처리) */
     @PostMapping("/reset-password-after-verify")
     public ResponseEntity<?> resetPasswordAfterVerify(@RequestBody @Validated ResetPasswordAfterVerifyRequest req) {
-        // ▼ 비밀번호 정책 검사
         String reason = PasswordPolicy.validateAndReason(req.getNewPassword());
         if (reason != null) {
             return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "PASSWORD_POLICY_VIOLATION", "message", reason));
@@ -265,12 +261,72 @@ public class AuthController {
         u.setPassword(passwordEncoder.encode(req.getNewPassword()));
         userRepository.save(u);
 
-        // 세션 revoke 유지
         var sessions = sessionRepository.findByUserAndRevokedIsFalse(u);
         for (var s : sessions) s.setRevoked(true);
         if (!sessions.isEmpty()) sessionRepository.saveAll(sessions);
 
         return ResponseEntity.ok(Map.of("ok", true, "message", "PASSWORD_RESET"));
+    }
+
+    /** (기존) 이메일인증 기반 사용자검증 — 아이디/비번 찾기 플로우 */
+    @PostMapping("/verify-pw-user")
+    public ResponseEntity<?> verifyPwUser(@RequestBody Map<String, Object> req) {
+        String userid = (String) req.get("userid");
+        String email  = (String) req.get("email");
+        Object vIdObj = req.get("verificationId");
+
+        if (userid == null || email == null || vIdObj == null) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "MISSING_FIELDS"));
+        }
+
+        Long vId;
+        try {
+            vId = (vIdObj instanceof Number) ? ((Number)vIdObj).longValue() : Long.parseLong(vIdObj.toString());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_VERIFICATION_ID"));
+        }
+
+        log.info("입력 userid={}, email={}, verificationId={}", userid, email, vId);
+        emailVerificationService.ensureVerified(vId, email, "FIND_PW");
+
+        boolean exists = userRepository.existsByUseridIgnoreCaseAndEmailIgnoreCase(userid.trim(), email.trim());
+        log.info("DB 조회 결과 exists={}", exists);
+
+        if (!exists) return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
+
+    // ⭐⭐ 새로 추가: “현재 비밀번호 확인 전용” (로그인 세션 필요)
+    @Data
+    static class VerifyCurrentPasswordRequest {
+        private String currentPassword;
+        private String clientType;
+        private String deviceId;
+    }
+
+    @PostMapping("/verify-current-password")
+    public ResponseEntity<?> verifyCurrentPassword(Authentication authentication,
+                                                   @RequestBody VerifyCurrentPasswordRequest req) {
+        if (authentication == null || authentication.getPrincipal() == null) {
+            return ResponseEntity.status(401).body(Map.of("ok", false, "reason", "UNAUTHORIZED"));
+        }
+        if (req == null || req.getCurrentPassword() == null || req.getCurrentPassword().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "MISSING_FIELDS"));
+        }
+
+        String userid = (String) authentication.getPrincipal();
+        var user = userRepository.findByUserid(userid).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "USER_NOT_FOUND"));
+        }
+
+        if (!passwordEncoder.matches(req.getCurrentPassword(), user.getPassword())) {
+            return ResponseEntity.status(400).body(Map.of("ok", false, "reason", "BAD_CURRENT_PASSWORD"));
+        }
+
+        log.info("verify-current-password OK: userid={}, clientType={}, deviceId={}",
+                userid, req.getClientType(), req.getDeviceId());
+        return ResponseEntity.ok(Map.of("ok", true));
     }
 
     // ───────── 내부 헬퍼들 ─────────
@@ -335,35 +391,5 @@ public class AuthController {
         if (refreshAbsoluteMaxDays <= 0) return false;
         var capEnd = s.getCreatedAt().plusDays(refreshAbsoluteMaxDays);
         return LocalDateTime.now().isAfter(capEnd);
-    }
-
-    /** 비밀번호 찾기: 아이디+이메일 존재 확인 (+ 이메일 인증 사용처리) */
-    @PostMapping("/verify-pw-user")
-    public ResponseEntity<?> verifyPwUser(@RequestBody Map<String, Object> req) {
-        String userid = (String) req.get("userid");
-        String email  = (String) req.get("email");
-        Object vIdObj = req.get("verificationId");
-
-        if (userid == null || email == null || vIdObj == null) {
-            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "MISSING_FIELDS"));
-        }
-
-        Long vId;
-        try {
-            vId = (vIdObj instanceof Number) ? ((Number)vIdObj).longValue() : Long.parseLong(vIdObj.toString());
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("ok", false, "reason", "INVALID_VERIFICATION_ID"));
-        }
-
-        log.info("입력 userid={}, email={}, verificationId={}", userid, email, vId);
-
-        emailVerificationService.ensureVerified(vId, email, "FIND_PW");
-
-        boolean exists = userRepository.existsByUseridIgnoreCaseAndEmailIgnoreCase(userid.trim(), email.trim());
-
-        log.info("DB 조회 결과 exists={}", exists);
-
-        if (!exists) return ResponseEntity.status(404).body(Map.of("ok", false, "reason", "NOT_FOUND"));
-        return ResponseEntity.ok(Map.of("ok", true));
     }
 }
