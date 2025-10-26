@@ -26,7 +26,13 @@ public class NoticeController {
                                       @RequestParam(required = false) NoticeType type) {
         var id = resolver.resolve(req);
         Pageable pageable = PageRequest.of(page, size, Sort.by(parse(sort)));
-        return service.list(q, id.role(), type, pageable).map(NoticeDtos.Resp::from);
+
+        // ✅ 로그인 유저면 읽음 포함, 아니면 기본
+        if (id.userId() != null && !id.userId().isBlank()) {
+            return service.listWithRead(q, id.role(), id.userId(), type, pageable);
+        } else {
+            return service.list(q, id.role(), type, pageable).map(NoticeDtos.Resp::from);
+        }
     }
 
     /** 상세 조회 + 조회수 증가 + (선택)읽음처리 */
@@ -37,10 +43,11 @@ public class NoticeController {
                                   @RequestParam(defaultValue = "true") boolean markRead) {
         var who = resolver.resolve(req);
         var n = service.findAndIncrease(id, increase);
-        if (markRead && who.userId() != null) { // ✅ null 가드 추가
+        if (markRead && who.userId() != null) {
             service.markRead(who.userId(), id);
         }
-        return NoticeDtos.Resp.from(n);
+        // 상세에서도 읽음 여부 포함해서 내려주고 싶다면 readAt 조회해 합쳐도 됨(선택)
+        return NoticeDtos.Resp.from(n /*, readAt */);
     }
 
     /** 미확인 개수 배지용 */
@@ -51,11 +58,11 @@ public class NoticeController {
         return new UnreadCountResp(cnt);
     }
 
-    /** 읽음 처리 API(리스트에서 스와이프 읽음 등 쓸 때) */
+    /** 읽음 처리 API */
     @PostMapping("/{id}/read")
     public void markRead(HttpServletRequest req, @PathVariable Long id) {
         var who = resolver.resolve(req);
-        if (who.userId() != null) { // ✅ null 가드 추가
+        if (who.userId() != null) {
             service.markRead(who.userId(), id);
         }
     }
