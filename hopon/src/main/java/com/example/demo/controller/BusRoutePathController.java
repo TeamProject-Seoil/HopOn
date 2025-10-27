@@ -27,7 +27,7 @@ public class BusRoutePathController {
         @RequestParam String busRouteId
         
     ) {
-        return ResponseEntity.ok(service.getStaionByRoute(busRouteId));
+        return ResponseEntity.ok(service.getRoutePathList(busRouteId));
     }
 
     @PostMapping
@@ -35,7 +35,17 @@ public class BusRoutePathController {
         @RequestBody BusRoutePathRequestDto request
     ) {
         return ResponseEntity.ok(
-            service.getStaionByRoute(request.getBusRouteId())
+            service.getRoutePathList(request.getBusRouteId())
         );
     }
+
+    @GetMapping("/segment")
+    public ResponseEntity<List<BusRoutePathDto>> getSegment(
+            @RequestParam String busRouteId,
+            @RequestParam String boardArsId,
+            @RequestParam String destArsId
+    ) {
+        return ResponseEntity.ok(service.getSegment(busRouteId, boardArsId, destArsId));
+    }
+
 }

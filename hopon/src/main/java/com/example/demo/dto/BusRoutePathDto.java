@@ -8,6 +8,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class BusRoutePathDto {
-	private Double gpsX;
-	private Double gpsY;
+	private Double lat;	//gps x
+	private Double lng;	//gps y
 }
