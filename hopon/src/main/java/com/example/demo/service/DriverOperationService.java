@@ -32,6 +32,7 @@ public class DriverOperationService {
     private final DriverLocationStreamService streamService;
     private final DriverVehicleRegistrationService registrationService;
 
+    private final ArrivalNowService arrivalNowService;
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_INSTANT;
 
     /* ===============================
@@ -113,18 +114,14 @@ public class DriverOperationService {
         // 번호판 정규화 후 매칭 (공공 API plainNo vs DB plate_no)
         String dbPlateNorm = normalizePlate(vehicle.getPlateNo());
         BusLocationDto matched = apiVehicles.stream()
-                .filter(v -> dbPlateNorm.equals(normalizePlate(v.getPlainNo())))
-                .findFirst()
-                // 일치가 없으면 "가장 가까운 차량"을 근사 선택(기사 GPS 기준)
-                .orElseGet(() -> apiVehicles.stream()
-                        .min(Comparator.comparingDouble(v ->
-                                distance2(req.getLat(), req.getLon(), v.getGpsY(), v.getGpsX())
-                        )).orElse(null));
+        	    .filter(v -> dbPlateNorm.equals(normalizePlate(v.getPlainNo())))
+        	    .findFirst()
+        	    .orElse(null);
 
-        if (matched == null) {
-            // 공공 API상 해당 노선에 차량이 없거나 일시 오류
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "NO_MATCHING_BUS_FROM_PUBLIC_API");
-        }
+        	if (matched == null) {
+        	    // 번호판이 해당 노선의 실시간 목록에서 안 보이면 시작 불가
+        	    throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PLATE_NOT_FOUND_ON_ROUTE");
+        	}
 
         var now = LocalDateTime.now();
         var op = DriverOperation.builder()
@@ -224,4 +221,55 @@ public class DriverOperationService {
         double dx = lon1 - lon2;
         return dx * dx + dy * dy;
     }
+    
+    // “이번/다음 정류장” 계산 로직
+    @Transactional
+    public ArrivalNowResponse getArrivalNow(org.springframework.security.core.Authentication auth) {
+        var user = authUserResolver.requireUser(auth);
+
+        var op = driverOperationRepository
+                .findFirstByUserNumAndStatus(user.getUserNum(), DriverOperationStatus.RUNNING)
+                .orElse(null);
+
+        if (op == null) {
+            return ArrivalNowResponse.builder()
+                    .currentStopName("-")
+                    .nextStopName("-")
+                    .etaSec(null)
+                    .build();
+        }
+
+        // 현재 노선의 버스 목록(공공 API)
+        List<BusLocationDto> buses = busLocationService.getBusPosByRtid(op.getRouteId());
+        if (buses == null || buses.isEmpty()) {
+            return ArrivalNowResponse.builder().currentStopName("-").nextStopName("-").etaSec(null).build();
+        }
+
+        // 1순위: apiVehId로 찾기
+        BusLocationDto matched = null;
+        if (StringUtils.hasText(op.getApiVehId())) {
+            matched = buses.stream()
+                    .filter(b -> op.getApiVehId().equals(b.getVehId()))
+                    .findFirst().orElse(null);
+        }
+
+        // 2순위: 번호판으로 보조 매칭
+        if (matched == null && StringUtils.hasText(op.getApiPlainNo())) {
+            String norm = normalizePlate(op.getApiPlainNo());
+            matched = buses.stream()
+                    .filter(b -> norm.equals(normalizePlate(b.getPlainNo())))
+                    .findFirst().orElse(null);
+        }
+
+        if (matched == null) {
+            // 매칭 실패 시 공백 리턴
+            return ArrivalNowResponse.builder().currentStopName("-").nextStopName("-").etaSec(null).build();
+        }
+
+        // ✅ 새 합성 서비스 호출: 노선 정류장 + 정류장 도착정보를 조합해서 ETA/정류장명 산출
+        return arrivalNowService.build(op.getRouteId(), matched, op.getApiPlainNo());
+    }
+
+
+   
 }

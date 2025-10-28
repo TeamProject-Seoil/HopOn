@@ -55,4 +55,10 @@ public class DriverOperationController {
         Optional<DriverOperation> op = service.findActive(auth);
         return ResponseEntity.ok(op.orElse(null));
     }
+    
+    /** 6) 현재 차량의 이번 / 다음 정류장 조회 */
+    @GetMapping("/operations/arrival-now")
+    public ResponseEntity<ArrivalNowResponse> arrivalNow(Authentication auth) {
+        return ResponseEntity.ok(service.getArrivalNow(auth));
+    }
 }

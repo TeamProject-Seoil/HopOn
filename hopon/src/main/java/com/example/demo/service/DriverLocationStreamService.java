@@ -4,6 +4,8 @@ import com.example.demo.dto.DriverLocationDto;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -16,6 +18,35 @@ public class DriverLocationStreamService {
     // opId -> 구독자 목록
     private final Map<Long, CopyOnWriteArrayList<SseEmitter>> streams = new ConcurrentHashMap<>();
 
+    // 전역 keep-alive 스케줄러
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+
+    @PostConstruct
+    void startPinger() {
+        // 15초 간격으로 전체 스트림에 ping 이벤트 전송 (프록시/브라우저 타임아웃 방지)
+        scheduler.scheduleAtFixedRate(() -> {
+            streams.forEach((opId, list) -> {
+                if (list == null || list.isEmpty()) return;
+                for (SseEmitter e : list) {
+                    try {
+                        e.send(SseEmitter.event().name("ping").data("ok"));
+                    } catch (IOException ex) {
+                        // 전송 실패 시 연결 정리
+                        e.complete();
+                    }
+                }
+            });
+        }, 15, 15, TimeUnit.SECONDS);
+    }
+
+    @PreDestroy
+    void stopPinger() {
+        scheduler.shutdownNow();
+        // 남은 emitter 종료
+        streams.values().forEach(list -> list.forEach(SseEmitter::complete));
+        streams.clear();
+    }
+
     // 구독 (SSE)
     public SseEmitter subscribe(Long operationId) {
         SseEmitter emitter = new SseEmitter(Duration.ofMinutes(30).toMillis()); // 30분 타임아웃
@@ -25,7 +56,7 @@ public class DriverLocationStreamService {
         emitter.onTimeout(() -> remove(operationId, emitter));
         emitter.onError(e -> remove(operationId, emitter));
 
-        // 연결 직후 더미 이벤트로 핑
+        // 연결 직후 핑 한 번
         try {
             emitter.send(SseEmitter.event().name("ping").data("ok"));
         } catch (IOException ignored) {}
