@@ -59,7 +59,8 @@ public class BusLocationService {
                         node.path("sectionId").asText(),
                         node.path("sectDist").asDouble(),
                         node.path("fullSectDist").asDouble(),
-                        node.path("dataTm").asText()
+                        node.path("dataTm").asText(),
+                        node.path("lowPlate").asText()
                 ));
             }
         }

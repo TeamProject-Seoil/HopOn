@@ -21,4 +21,5 @@ public class BusLocationDto {
     private Double sectDist;	//구간옵셋거리
     private Double fullSectDist;	//정류소간 거리
     private String dataTm;	//제공시간
+    private String  lowPlate;
 }

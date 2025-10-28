@@ -3,6 +3,7 @@ package com.example.demo.service;
 
 import com.example.demo.dto.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired; // ▼ optional bean 주입용
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -17,16 +18,27 @@ public class ArrivalNowService {
     private final BusStopListService busStopListService;
     private final StationStopListService stationStopListService;
 
+    // ================== [추가] 노선유형 보완용 (선택) ==================
+    // OpenAPI 혹은 내부 캐시에서 routeType 을 얻어오는 서비스가 있으면 주입 (없어도 동작)
+    @Autowired(required = false)
+    private BusRouteInfoService routeInfoService;
+
     /** 
      * 주 버전:
      * - 노선 정류장 목록(getStaionByRoute)로 현재/다음 정류장 이름 산출
      * - 현재 정류장의 도착정보(getStationByUid)에서 plateNo 매칭 → ETA(초) 산출
+     * - [추가] 저상여부 + 노선유형(코드/라벨) 계산 후 함께 반환
      */
     public ArrivalNowResponse build(String routeId, BusLocationDto bus, String fallbackPlainNo) {
         // 1) 노선의 정류장 목록
         List<BusStopListDto> stops = busStopListService.getStaionByRoute(routeId);
         if (stops == null || stops.isEmpty()) {
-            return empty();
+            // [추가] 빈 값에 대해서도 저상/노선유형 계산 시도
+            return empty(
+                resolveLowFloor(bus, fallbackPlainNo),
+                resolveRouteTypeCode(routeId),
+                null // 라벨은 아래에서 매핑
+            );
         }
 
         // 2) sectOrd 기반 현재 seq 추정 (없으면 좌표 근접)
@@ -74,21 +86,39 @@ public class ArrivalNowService {
             }
         }
 
+        // ================== [추가] 저상 여부 + 노선유형(코드/라벨) 계산 ==================
+        Boolean lowFloor        = resolveLowFloor(bus, fallbackPlainNo);
+        Integer routeTypeCode   = resolveRouteTypeCode(routeId);
+        String  routeTypeLabel  = toRouteTypeLabel(routeTypeCode);
+
         return ArrivalNowResponse.builder()
                 .currentStopName(currentName)
                 .nextStopName(nextName)
                 .etaSec(etaSec)
+                // ▼ [추가 필드]
+                .lowFloor(lowFloor)
+                .routeTypeCode(routeTypeCode)
+                .routeTypeLabel(routeTypeLabel)
                 .build();
     }
 
     // ====== 보조 메서드들 ======
 
-    private ArrivalNowResponse empty() {
+    private ArrivalNowResponse empty(Boolean lowFloor, Integer routeTypeCode, String routeTypeLabel) {
         return ArrivalNowResponse.builder()
                 .currentStopName("-")
                 .nextStopName("-")
                 .etaSec(null)
+                // ▼ [추가 필드]
+                .lowFloor(lowFloor)
+                .routeTypeCode(routeTypeCode)
+                .routeTypeLabel(toRouteTypeLabel(routeTypeCode != null ? routeTypeCode : null, routeTypeLabel))
                 .build();
+    }
+
+    // 기존 empty() 시그니처 유지용 (호출부에서 저상/노선유형을 안 넘겼을 때)
+    private ArrivalNowResponse empty() {
+        return empty(null, null, null);
     }
 
     private Integer seqFromSectOrd(BusLocationDto bus, List<BusStopListDto> stops) {
@@ -146,5 +176,86 @@ public class ArrivalNowService {
     private String normalizePlate(String s) {
         if (s == null) return "";
         return s.replaceAll("[^0-9가-힣A-Za-z]", "").toUpperCase();
+    }
+
+    // ================== [추가] 저상 여부 판단 ==================
+    /**
+     * 1순위: 위치 DTO 내 저상 관련 필드(lowPlate/lowBusYn/isLowFloor 등) 존재 시 사용
+     * 2순위: busType 코드로 추정(기관별 다름 → 보수적으로 true 가능 케이스만 처리)
+     * 3순위: 알 수 없으면 null
+     */
+    private Boolean resolveLowFloor(BusLocationDto bus, String fallbackPlainNo) {
+        // 1) DTO 내 저상 필드 유연 접근
+        try {
+            Object v;
+            v = tryGet(bus, "getLowPlate");  if (v != null) return yesNo(v);
+            v = tryGet(bus, "getLowBusYn");  if (v != null) return yesNo(v);
+            v = tryGet(bus, "isLowFloor");   if (v != null) return yesNo(v);
+        } catch (Exception ignore) {}
+
+        // 2) busType 기반 보조 추정 (프로젝트/기관 규약에 맞게 보강 가능)
+        Integer busType = safeParseInt(bus.getBusType());
+        if (busType != null) {
+            // 예) 2, 9 를 저상으로 쓰는 케이스가 종종 있음. (확실치 않으면 null 반환)
+            if (busType == 2 || busType == 9) return true;
+        }
+
+        // 3) 더 이상 단서 없으면 null
+        return null;
+    }
+
+    private Object tryGet(Object target, String method) {
+        try { return target.getClass().getMethod(method).invoke(target); }
+        catch (Exception e) { return null; }
+    }
+
+    private Boolean yesNo(Object val) {
+        String s = String.valueOf(val).trim().toUpperCase();
+        if ("1".equals(s) || "Y".equals(s) || "TRUE".equals(s))  return true;
+        if ("0".equals(s) || "N".equals(s) || "FALSE".equals(s)) return false;
+        return null;
+    }
+
+    private Integer safeParseInt(Object o) {
+        if (o == null) return null;
+        try { return Integer.parseInt(String.valueOf(o).trim()); }
+        catch (Exception e) { return null; }
+    }
+
+    // ================== [추가] 노선유형 코드/라벨 ==================
+    private Integer resolveRouteTypeCode(String routeId) {
+        if (!StringUtils.hasText(routeId)) return null;
+        if (routeInfoService != null) {
+            try {
+                RouteInfoDto info = routeInfoService.getRouteInfo(routeId);
+                if (info != null && info.getBusRouteType() != null) {
+                    return info.getBusRouteType();
+                }
+            } catch (Exception ignore) {}
+        }
+        // 모르면 null
+        return null;
+    }
+
+    private String toRouteTypeLabel(Integer code) {
+        return toRouteTypeLabel(code, null);
+    }
+
+    private String toRouteTypeLabel(Integer code, String fallback) {
+        if (code == null) return fallback != null ? fallback : "기타";
+        // 서울시 busRouteType 코드 맵 (필요에 따라 보강)
+        return switch (code) {
+            case 1  -> "공항";
+            case 2  -> "마을";
+            case 3  -> "간선";
+            case 4  -> "지선";
+            case 5  -> "순환";
+            case 6  -> "광역";
+            case 7  -> "인천";
+            case 8  -> "경기";
+            case 9  -> "폐지";
+            case 0  -> "공용";
+            default -> "기타";
+        };
     }
 }
