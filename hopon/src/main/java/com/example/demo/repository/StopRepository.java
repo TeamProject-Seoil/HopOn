@@ -3,7 +3,6 @@ package com.example.demo.repository;
 import com.example.demo.entity.Stop;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.Repository;
 import org.springframework.data.repository.query.Param;
 
 public interface StopRepository extends JpaRepository<Stop, String> {
@@ -16,4 +15,15 @@ public interface StopRepository extends JpaRepository<Stop, String> {
         """, nativeQuery = true)
 	StopCoord findCoord(@Param("routeId") String routeId,
 						@Param("arsId") String arsId);
+
+	@Query(value = """
+        SELECT seq
+        FROM route_stop_seq
+        WHERE route_id = :routeId AND ars_id = :arsId
+        LIMIT 1
+        """, nativeQuery = true)
+	Integer findSeq(@Param("routeId") String routeId,
+					@Param("arsId") String arsId);
+
+	default boolean isCircularRoute(String routeId) { return false; }
 }
