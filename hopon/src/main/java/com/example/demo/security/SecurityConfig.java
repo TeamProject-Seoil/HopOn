@@ -110,6 +110,9 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/inquiries/*").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/inquiries/*/attachments/*").authenticated()
 
+                // 버스기사 운행
+                .requestMatchers("/api/driver/**").hasRole("DRIVER")
+                
                 // 헬스체크 & 에러
                 .requestMatchers("/actuator/health", "/error").permitAll()
 
