@@ -154,4 +154,23 @@ public class ArrivalNowService {
     }
 
     private Integer safeParseInt(Object o) { try { return o==null?null:Integer.parseInt(String.valueOf(o).trim()); } catch (Exception e) { return null; } }
+
+    /** 리스트/상세 합성용: routeId -> (code,label) 한 번에 */
+    // after ✅ 정류장 목록을 받아서 fallback로 사용
+    public RouteTypeMeta resolveRouteType(String routeId) {
+        List<BusStopListDto> stops = null;
+        try {
+            stops = busStopListService.getStaionByRoute(routeId);
+        } catch (Exception ignore) { /* 네트워크/파싱 예외 무시하고 1순위만 시도 */ }
+
+        Integer code = resolveRouteTypeCode(routeId, stops); // ← null 대신 stops 전달
+        return new RouteTypeMeta(code, toRouteTypeLabel(code));
+    }
+
+    /** 작은 DTO */
+    public static class RouteTypeMeta {
+        public final Integer code;
+        public final String  label;
+        public RouteTypeMeta(Integer code, String label) { this.code = code; this.label = label; }
+    }
 }
