@@ -26,7 +26,7 @@ public class BusRoutePathService {
     private String serviceKey;
 
     /** 1) 전체 노선 polyline: getRoutePathList (JSON) */
-    @Cacheable(value = "routePolylineCache", key = "#busRouteId")
+    @Cacheable(value = "routePolylineCache", key = "#busRouteId", unless="#result == null || #result.isEmpty()")
     public List<BusRoutePathDto> getRoutePathList(String busRouteId) {
         JsonNode root = webClient.get()
                 .uri(uri -> uri
