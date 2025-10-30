@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -22,7 +23,7 @@ public class BusStopListService {
     private String serviceKey;
 
 
-    
+    @Cacheable(value = "routePathCache", key = "#busRouteId")
     public List<BusStopListDto> getStaionByRoute(String busRouteId) {
         JsonNode root = webClient.get()
             .uri(uri -> uri
