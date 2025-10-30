@@ -4,6 +4,7 @@ package com.example.demo.controller;
 import com.example.demo.dto.BusLocationDto;
 import com.example.demo.dto.DriverLocationDto;
 import com.example.demo.entity.ReservationEntity;
+import com.example.demo.repository.DriverOperationRepository;
 import com.example.demo.repository.ReservationRepository;
 import com.example.demo.service.BusLocationService;
 import com.example.demo.support.AuthUserResolver;
@@ -12,49 +13,60 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+//src/main/java/com/example/demo/controller/ReservationBusController.java
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/api/reservations")
-@RequiredArgsConstructor
 public class ReservationBusController {
 
-    private final ReservationRepository reservationRepository;
-    private final BusLocationService busLocationService;
-    private final AuthUserResolver auth;
+ private final ReservationRepository reservationRepository;
+ private final DriverOperationRepository driverOperationRepository; // ✅ 추가
+ private final BusLocationService busLocationService;
+ private final AuthUserResolver auth;
 
-    @GetMapping("/{id}/location")
-    public ResponseEntity<DriverLocationDto> currentLocation(Authentication a, @PathVariable Long id){
-        var user = auth.requireUser(a);
-        ReservationEntity r = reservationRepository.findById(id)
-                .orElse(null);
-        if (r == null || !r.getUser().getUserNum().equals(user.getUserNum())) {
-            return ResponseEntity.notFound().build();
-        }
+ @GetMapping("/{id}/location")
+ public ResponseEntity<DriverLocationDto> currentLocation(Authentication a, @PathVariable Long id){
+     var user = auth.requireUser(a);
+     var r = reservationRepository.findById(id).orElse(null);
+     if (r == null || !r.getUser().getUserNum().equals(user.getUserNum())) {
+         return ResponseEntity.notFound().build();
+     }
 
-        // 1) HopOn 운행과 연결된 경우 → 공용 DTO로 리턴(프론트는 SSE도 가능)
-        if (r.getOperationId() != null) {
-            // 프론트에선 SSE로 /api/stream/driver/operations/{operationId}/location 구독 권장
-            // 여기서는 즉시 스냅샷만 간단히 리턴하려면 DriverLocationController를 호출해도 되고,
-            // or 별도 Repo로 op 조회 + lastLat/lastLon 리턴 구현 가능(간단화를 위해 공공API로 fallback).
-        }
+     // 1) HopOn 운행과 연결된 경우 → 운영 DB의 최신 하트비트 좌표 리턴
+     if (r.getOperationId() != null) {
+         var op = driverOperationRepository.findById(r.getOperationId()).orElse(null);
+         if (op != null && op.getLastLat() != null && op.getLastLon() != null) {
+             var dto = DriverLocationDto.builder()
+                     .operationId(op.getId())
+                     .lat(op.getLastLat())
+                     .lon(op.getLastLon())
+                     .updatedAtIso(op.getUpdatedAt() == null ? null :
+                             op.getUpdatedAt().atOffset(java.time.ZoneOffset.UTC).toString())
+                     .stale(false)
+                     .build();
+             return ResponseEntity.ok(dto); // ✅ 여기서 바로 종료
+         }
+         // 좌표가 아직 없으면 아래 공공데이터 fallback으로 진행
+     }
 
-        // 2) 공공데이터 fallback: routeId 목록 중 plate/vehId 일치하는 차량 찾아 리턴
-        var list = busLocationService.getBusPosByRtid(r.getRouteId());
-        var match = list.stream().filter(b ->
-                norm(b.getPlainNo()).equals(norm(r.getApiPlainNo()))
-             || (r.getApiVehId()!=null && r.getApiVehId().equals(b.getVehId()))
-        ).findFirst().orElse(null);
+     // 2) 공공데이터 fallback (현재 코드 유지)
+     var list = busLocationService.getBusPosByRtid(r.getRouteId());
+     var match = list.stream().filter(b ->
+             norm(b.getPlainNo()).equals(norm(r.getApiPlainNo()))
+          || (r.getApiVehId()!=null && r.getApiVehId().equals(b.getVehId()))
+     ).findFirst().orElse(null);
 
-        if (match == null) return ResponseEntity.noContent().build();
+     if (match == null) return ResponseEntity.noContent().build();
 
-        var dto = DriverLocationDto.builder()
-                .operationId(r.getOperationId()) // null일 수 있음
-                .lat(match.getGpsY())
-                .lon(match.getGpsX())
-                .updatedAtIso(match.getDataTm()) // 공공데이터 제공시간 문자열
-                .stale(false)
-                .build();
-        return ResponseEntity.ok(dto);
-    }
+     var dto = DriverLocationDto.builder()
+             .operationId(r.getOperationId())
+             .lat(match.getGpsY())
+             .lon(match.getGpsX())
+             .updatedAtIso(match.getDataTm())
+             .stale(false)
+             .build();
+     return ResponseEntity.ok(dto);
+ }
 
-    private String norm(String s){ return s==null?"":s.replaceAll("[^0-9가-힣A-Za-z]","").toUpperCase(); }
+ private String norm(String s){ return s==null?"":s.replaceAll("[^0-9가-힣A-Za-z]","").toUpperCase(); }
 }

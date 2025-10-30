@@ -24,18 +24,19 @@ public class ReservationService {
     private final UserRepository userRepository;
     private final ReservationBusMatcher busMatcher;
     private final DriverOperationRepository driverOperationRepository;
-
+    private final ArrivalNowService arrivalNowService;
+    
     /** 예약 생성 */
     @Transactional
     public ReservationEntity createReservation(UserEntity user, ReservationRequestDto dto) {
-        // 1) 중복 예약 검증
-        boolean exists = reservationRepository.existsByUserAndStatus(user, ReservationStatus.CONFIRMED);
-        if (exists) {
+        if (reservationRepository.existsByUserAndStatus(user, ReservationStatus.CONFIRMED)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "DUPLICATE_ACTIVE");
         }
 
-     // 2) 기본 예약 저장
-        ReservationEntity entity = reservationRepository.save(
+        // 노선유형 계산
+        var meta = arrivalNowService.resolveRouteType(dto.getRouteId()); // code, label
+
+        var entity = reservationRepository.save(
                 ReservationEntity.builder()
                         .user(user)
                         .routeId(dto.getRouteId())
@@ -48,30 +49,26 @@ public class ReservationService {
                         .destArsId(dto.getDestArsId())
                         .status(ReservationStatus.CONFIRMED)
                         .routeName(dto.getRouteName())
+                        .busRouteType(meta.code)          // ✅ 저장
+                        .routeTypeName(meta.label)        // ✅ 저장
                         .build()
         );
 
-        // 3) 가장 먼저 도착할 버스 매칭
+        // 이후 매칭/운행 연결 로직은 기존 그대로…
         var match = busMatcher.pickBest(dto.getRouteId(), dto.getBoardArsId());
         if (match != null) {
             entity.setApiVehId(match.apiVehId());
             entity.setApiPlainNo(match.apiPlainNo());
-
-            // 4) 운행 연결(있으면)
             driverOperationRepository
-                    .findByRouteIdAndStatusOrderByUpdatedAtDesc(dto.getRouteId(), DriverOperationStatus.RUNNING)
-                    .stream()
-                    .filter(op ->
-                            equalsIgnoreNull(op.getApiVehId(), match.apiVehId()) ||
-                            norm(op.getApiPlainNo()).equals(norm(match.apiPlainNo()))
-                    )
-                    .findFirst()
-                    .ifPresent(op -> entity.setOperationId(op.getId()));
+                .findByRouteIdAndStatusOrderByUpdatedAtDesc(dto.getRouteId(), DriverOperationStatus.RUNNING)
+                .stream()
+                .filter(op -> (op.getApiVehId()!=null && op.getApiVehId().equals(match.apiVehId()))
+                           || norm(op.getApiPlainNo()).equals(norm(match.apiPlainNo())))
+                .findFirst()
+                .ifPresent(op -> entity.setOperationId(op.getId()));
         }
 
-        // 5) 최종 저장 (재할당 금지!)
-        reservationRepository.save(entity);
-        return entity;
+        return reservationRepository.save(entity);
     }
 
     private String norm(String s) {

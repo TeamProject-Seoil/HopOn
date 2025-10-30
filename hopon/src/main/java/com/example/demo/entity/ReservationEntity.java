@@ -69,4 +69,10 @@ public class ReservationEntity {
 
     @Column(name = "operation_id")          // 선택: 실제 HopOn 운행과 연결되면 저장
     private Long operationId;
+    
+    @Column(name = "bus_route_type")
+    private Integer busRouteType;
+
+    @Column(name = "route_type_name", length = 20)
+    private String routeTypeName;
 }
