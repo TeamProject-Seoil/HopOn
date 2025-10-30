@@ -59,4 +59,14 @@ public class ReservationEntity {
     void prePersist() {
         if (status == null) status = ReservationStatus.CONFIRMED;
     }
+    
+    // ReservationEntity.java (필드 추가)
+    @Column(name = "api_veh_id", length = 32)
+    private String apiVehId;
+
+    @Column(name = "api_plain_no", length = 32)
+    private String apiPlainNo;
+
+    @Column(name = "operation_id")          // 선택: 실제 HopOn 운행과 연결되면 저장
+    private Long operationId;
 }
