@@ -1,3 +1,4 @@
+// src/main/java/com/example/demo/entity/DriverOperation.java
 package com.example.demo.entity;
 
 import jakarta.persistence.*;
@@ -18,20 +19,24 @@ public class DriverOperation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** users.user_num */
     @Column(name = "user_num", nullable = false)
     private Long userNum;
 
-    /** bus_vehicle.vehicle_id */
     @Column(name = "vehicle_id", length = 20, nullable = false)
     private String vehicleId;
 
-    /** HopOn 노선 */
     @Column(name = "route_id", length = 20, nullable = false)
     private String routeId;
 
     @Column(name = "route_name", length = 50, nullable = false)
     private String routeName;
+
+    /** 운행 시작 시 스냅샷: 노선유형 */
+    @Column(name = "route_type_code")
+    private Integer routeTypeCode;
+
+    @Column(name = "route_type_label", length = 20)
+    private String routeTypeLabel;
 
     /** 공공API 상 차량 식별(plainNo/vehId 매칭 결과) */
     @Column(name = "api_veh_id", length = 32)
@@ -50,7 +55,6 @@ public class DriverOperation {
     @Column(name = "ended_at")
     private LocalDateTime endedAt;
 
-    /** 기사 현재 위치 마지막 보고 */
     @Column(name = "last_lat")
     private Double lastLat;
 

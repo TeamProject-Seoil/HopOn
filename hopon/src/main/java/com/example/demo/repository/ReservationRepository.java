@@ -18,18 +18,14 @@ import java.util.Set;
 @Repository
 public interface ReservationRepository extends JpaRepository<ReservationEntity, Long> {
 
-    // ✅ 존재 여부(중복 체크) — 지금 서비스 코드에서 사용
+    // ===== 기존 메서드들 유지 =====
     boolean existsByUserAndStatus(UserEntity user, ReservationStatus status);
-
-    // (선택) 활성 상태가 여러 개인 경우에 대비
     boolean existsByUserAndStatusIn(UserEntity user, List<ReservationStatus> statuses);
     boolean existsByUserAndStatusIn(UserEntity user, Set<ReservationStatus> statuses);
 
-    // (선택) 사용자별 조회 최적화
     List<ReservationEntity> findByUser(UserEntity user);
     List<ReservationEntity> findByUserAndStatus(UserEntity user, ReservationStatus status);
 
-    // 이미 있던 취소용 커스텀 쿼리 유지
     @Transactional
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
@@ -44,10 +40,36 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
                                     @Param("cancelled") ReservationStatus cancelled,
                                     @Param("cancellable") Set<ReservationStatus> cancellable);
 
-    // ✅ 최신 1건(활성) 조회
     Optional<ReservationEntity> findTopByUser_UserNumAndStatusOrderByUpdatedAtDesc(
             Long userNum, ReservationStatus status);
 
-    // ✅ 전체 예약 내역 조회(최신순)
     List<ReservationEntity> findByUserOrderByUpdatedAtDesc(UserEntity user);
+
+    // ===== 여기부터 운행 중 승객 조회용 추가 =====
+    @Query("""
+        select r from ReservationEntity r
+         where r.apiVehId = :apiVehId
+           and r.status in :statuses
+         order by r.updatedAt desc
+    """)
+    List<ReservationEntity> findActiveByApiVehId(@Param("apiVehId") String apiVehId,
+                                                 @Param("statuses") Set<ReservationStatus> statuses);
+
+    @Query("""
+        select r from ReservationEntity r
+         where r.apiPlainNo = :apiPlainNo
+           and r.status in :statuses
+         order by r.updatedAt desc
+    """)
+    List<ReservationEntity> findActiveByApiPlainNo(@Param("apiPlainNo") String apiPlainNo,
+                                                   @Param("statuses") Set<ReservationStatus> statuses);
+
+    @Query("""
+        select r from ReservationEntity r
+         where r.routeId = :routeId
+           and r.status in :statuses
+         order by r.updatedAt desc
+    """)
+    List<ReservationEntity> findActiveByRoute(@Param("routeId") String routeId,
+                                              @Param("statuses") Set<ReservationStatus> statuses);
 }

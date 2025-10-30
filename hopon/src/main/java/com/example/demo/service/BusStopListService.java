@@ -23,7 +23,7 @@ public class BusStopListService {
     private String serviceKey;
 
 
-    @Cacheable(value = "routePathCache", key = "#busRouteId")
+    @Cacheable(value = "routePathCache", key = "#busRouteId", unless="#result == null || #result.isEmpty()")
     public List<BusStopListDto> getStaionByRoute(String busRouteId) {
         JsonNode root = webClient.get()
             .uri(uri -> uri
@@ -36,10 +36,17 @@ public class BusStopListService {
             .bodyToMono(JsonNode.class)
             .block();
 
-        if (root == null) return List.of();
+        if (root == null) {
+            throw new IllegalStateException("getStaionByRoute: null response");
+        }
 
         JsonNode items = root.path("msgBody")
                              .path("itemList");
+
+        if (!items.isArray()) {
+            // ❌ 이상 응답은 캐시하지 않기 위해 예외
+            throw new IllegalStateException("getStaionByRoute: invalid payload");
+        }
                              
 
         List<BusStopListDto> list = new ArrayList<>();

@@ -32,9 +32,22 @@ public class DriverVehicleRegistrationService {
     public void addIfAbsent(Long userNum, String vehicleId) {
         if (userNum == null || vehicleId == null) return;
         if (!regRepo.existsByUserNumAndVehicleId(userNum, vehicleId)) {
+            BusVehicleEntity v = busRepo.findById(vehicleId).orElse(null);
+
+            Integer routeTypeCode = null;
+            String  routeTypeLabel = null;
+            if (v != null) {
+                routeTypeCode  = resolveRouteTypeCode(v.getRouteId());
+                routeTypeLabel = toRouteTypeLabel(routeTypeCode);
+            }
+
             regRepo.save(DriverVehicleRegistration.builder()
                     .userNum(userNum)
                     .vehicleId(vehicleId)
+                    .plateNo(v != null ? v.getPlateNo() : null) // ★ 차량번호 스냅샷
+                    .routeName(v != null ? v.getRouteName(): null) // ★ 노선명 스냅샷
+                    .routeTypeCode(routeTypeCode)                   // ★ 노선유형 코드 스냅샷
+                    .routeTypeLabel(routeTypeLabel)                 // ★ 노선유형 라벨 스냅샷
                     .build());
         }
     }
@@ -55,23 +68,31 @@ public class DriverVehicleRegistrationService {
         for (var r : regs) {
             BusVehicleEntity v = busRepo.findById(r.getVehicleId()).orElse(null);
 
-            Integer routeTypeCode = resolveRouteTypeCode(v != null ? v.getRouteId() : null);
-            String routeTypeLabel = toRouteTypeLabel(routeTypeCode);
+            Integer routeTypeCode =
+                    (r.getRouteTypeCode() != null) ? r.getRouteTypeCode()
+                                                   : (v != null ? resolveRouteTypeCode(v.getRouteId()) : null);
+            String routeTypeLabel =
+                    (r.getRouteTypeLabel() != null) ? r.getRouteTypeLabel()
+                                                    : toRouteTypeLabel(routeTypeCode);
+
+            String routeId   = (v != null ? v.getRouteId()   : null);
+            String routeName = (r.getRouteName() != null) ? r.getRouteName()         // ★ 스냅샷 우선
+                                : (v != null ? v.getRouteName() : null);             //    없으면 현재값
 
             out.add(DriverVehicleRegistrationDto.builder()
                     .vehicleId(r.getVehicleId())
-                    .plateNo(v != null ? v.getPlateNo() : null)
-                    .routeId(v != null ? v.getRouteId() : null)
-                    .routeName(v != null ? v.getRouteName() : null)
+                    .plateNo((r.getPlateNo() != null) ? r.getPlateNo()
+                                                      : (v != null ? v.getPlateNo() : null))
+                    .routeId(routeId)
+                    .routeName(routeName)               // ★ 반영
                     .routeTypeCode(routeTypeCode)
                     .routeTypeLabel(routeTypeLabel)
-                    .createdAtIso(r.getCreatedAt() == null
-                            ? null
-                            : r.getCreatedAt().toInstant(ZoneOffset.UTC).toString())
+                    .createdAtIso(r.getCreatedAt() == null ? null : r.getCreatedAt().toInstant(ZoneOffset.UTC).toString())
                     .build());
         }
         return out;
     }
+
 
     // ---------------------- 내부 헬퍼 ----------------------
 

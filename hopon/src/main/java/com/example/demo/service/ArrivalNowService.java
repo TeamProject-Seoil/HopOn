@@ -2,65 +2,64 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.*;
+import com.example.demo.repository.StopRepository;
+// ⚠ StopRow import는 더 이상 안 써도 됩니다. (충돌 방지 차원에서 제거 권장)
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
-import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class ArrivalNowService {
 
-    private final BusStopListService busStopListService;
     private final StationStopListService stationStopListService;
+    private final StopRepository stopRepository;
 
     @Autowired(required = false)
-    private BusRouteInfoService routeInfoService; // 없으면 null
+    private BusRouteInfoService routeInfoService;
 
-    /**
-     * - 노선 정류장 목록(getStaionByRoute)에서 현재/다음 정류장 산출
-     * - 현재 정류장 도착정보(getStationByUid)로 ETA 근사
-     * - 노선유형: 1순위 routeInfoService, 2순위 정류장 목록의 routeType, 3순위 null
-     */
+    @Autowired(required = false)
+    private BusStopListService busStopListService;
+
     public ArrivalNowResponse build(String routeId, BusLocationDto bus, String fallbackPlainNo) {
-        // 1) 노선의 정류장 목록
-        List<BusStopListDto> stops = busStopListService.getStaionByRoute(routeId);
-
-        // 1-1) 노선유형 메타
-        Integer routeTypeCode  = resolveRouteTypeCode(routeId, stops);
+        Integer routeTypeCode  = resolveRouteTypeCode(routeId);
         String  routeTypeLabel = toRouteTypeLabel(routeTypeCode);
 
-        if (stops == null || stops.isEmpty()) {
-            // 정류장 데이터가 없어도 메타는 유지
+        Integer currSeq = parseSectOrd(bus);
+        if (currSeq == null && bus != null && bus.getGpsY() != null && bus.getGpsX() != null) {
+            currSeq = stopRepository.findNearestSeq(routeId, bus.getGpsY(), bus.getGpsX());
+        }
+        if (currSeq == null) {
             return empty(routeTypeCode, routeTypeLabel);
         }
 
-        // 2) sectOrd 기반 seq, 없으면 좌표 근접
-        Integer currSeq = seqFromSectOrd(bus, stops);
-        if (currSeq == null) currSeq = nearestSeqByCoord(bus, stops);
+        Integer maxSeq = stopRepository.findMaxSeq(routeId);
+        if (maxSeq == null || maxSeq < 1) {
+            return empty(routeTypeCode, routeTypeLabel);
+        }
+        boolean circular = stopRepository.isCircularRoute(routeId);
+        int nextSeq = (currSeq >= maxSeq) ? (circular ? 1 : maxSeq) : (currSeq + 1);
 
-        // 3) 현재/다음 정류장
-        BusStopListDto current = findBySeq(stops, currSeq);
-        BusStopListDto next    = findBySeq(stops, currSeq == null ? null : currSeq + 1);
-        String currentName = current != null ? nz(current.getStationNm(), "-") : "-";
-        String nextName    = next    != null ? nz(next.getStationNm(), "-")    : "-";
+        // ▼▼▼ 여기부터 RAW 사용 ▼▼▼
+        StopRowRaw curr = toStopRowRaw(stopRepository.findStopRowBySeqRaw(routeId, currSeq));
+        StopRowRaw next = toStopRowRaw(stopRepository.findStopRowBySeqRaw(routeId, nextSeq));
 
-        // 4) ETA 근사
+        String currentName = (curr != null && !isBlank(curr.stopName)) ? curr.stopName : "-";
+        String nextName    = (next != null && !isBlank(next.stopName)) ? next.stopName : "-";
+
         Integer etaSec = null;
-        String arsForEta = current != null ? current.getArsId() : null;
-        if (StringUtils.hasText(arsForEta)) {
-            List<StationStopListDto> arrivals = stationStopListService.getStationByUid(arsForEta);
+        if (curr != null && !isBlank(curr.arsId)) {
+            List<StationStopListDto> arrivals = stationStopListService.getStationByUid(curr.arsId);
             if (arrivals != null && !arrivals.isEmpty()) {
                 for (StationStopListDto row : arrivals) {
                     if (!routeId.equals(row.getBusRouteId())) continue;
                     Integer e1 = ArrmsgParser.toSeconds(row.getArrmsg1());
                     Integer e2 = ArrmsgParser.toSeconds(row.getArrmsg2());
-                    Integer candidate = minIgnoreNull(e1, e2);
-                    if (candidate != null) etaSec = (etaSec == null) ? candidate : Math.min(etaSec, candidate);
+                    Integer cand = minIgnoreNull(e1, e2);
+                    if (cand != null) etaSec = (etaSec == null) ? cand : Math.min(etaSec, cand);
                 }
             }
         }
@@ -74,7 +73,6 @@ public class ArrivalNowService {
                 .build();
     }
 
-    /** 매칭/데이터 없을 때 기본 응답(메타 유지) — 다른 서비스에서도 쓸 수 있게 public */
     public ArrivalNowResponse empty(Integer routeTypeCode, String routeTypeLabel) {
         return ArrivalNowResponse.builder()
                 .currentStopName("-")
@@ -86,64 +84,42 @@ public class ArrivalNowService {
     }
 
     // ---------- helpers ----------
-    private Integer seqFromSectOrd(BusLocationDto bus, List<BusStopListDto> stops) {
+    private Integer parseSectOrd(BusLocationDto bus) {
         try {
-            String so = bus != null ? bus.getSectOrd() : null;
+            String so = (bus != null) ? bus.getSectOrd() : null;
             if (!StringUtils.hasText(so)) return null;
-            int seq = Integer.parseInt(so);
-            int maxSeq = stops.stream().map(BusStopListDto::getSeq).max(Comparator.naturalOrder()).orElse(0);
-            if (seq < 1 || seq > maxSeq) return null;
-            return seq;
+            int seq = Integer.parseInt(so.trim());
+            return (seq >= 1) ? seq : null;
         } catch (Exception e) { return null; }
     }
 
-    private Integer nearestSeqByCoord(BusLocationDto bus, List<BusStopListDto> stops) {
-        if (bus == null || bus.getGpsY() == null || bus.getGpsX() == null) return null;
-        double lat = bus.getGpsY(), lon = bus.getGpsX();
-        double best = Double.MAX_VALUE; Integer bestSeq = null;
-        for (BusStopListDto s : stops) {
-            if (s.getGpsY() == null || s.getGpsX() == null) continue;
-            double d2 = dist2(lat, lon, s.getGpsY(), s.getGpsX());
-            if (d2 < best) { best = d2; bestSeq = s.getSeq(); }
-        }
-        return bestSeq;
-    }
+    private boolean isBlank(String s) { return s == null || s.isBlank(); }
+    private Integer minIgnoreNull(Integer a, Integer b) { if (a == null) return b; if (b == null) return a; return Math.min(a, b); }
 
-    private double dist2(double lat1, double lon1, double lat2, double lon2) {
-        double dy = lat1 - lat2, dx = lon1 - lon2; return dx*dx + dy*dy;
-    }
-
-    private BusStopListDto findBySeq(List<BusStopListDto> stops, Integer seq) {
-        if (seq == null) return null;
-        for (BusStopListDto s : stops) if (Objects.equals(s.getSeq(), seq)) return s;
-        return null;
-    }
-
-    private Integer minIgnoreNull(Integer a, Integer b) {
-        if (a == null) return b; if (b == null) return a; return Math.min(a, b);
-    }
-    private String nz(String s, String d) { return (s == null || s.isBlank()) ? d : s; }
-
-    // --- 노선유형 코드/라벨 ---
-    public Integer resolveRouteTypeCode(String routeId, List<BusStopListDto> stops) {
+    private Integer resolveRouteTypeCode(String routeId) {
         if (StringUtils.hasText(routeId) && routeInfoService != null) {
             try {
                 RouteInfoDto info = routeInfoService.getRouteInfo(routeId);
                 if (info != null && info.getBusRouteType() != null) return info.getBusRouteType();
             } catch (Exception ignore) {}
         }
-        if (stops != null) {
-            for (BusStopListDto s : stops) {
-                Integer c = safeParseInt(s.getRouteType());
-                if (c != null) return c;
-            }
+        if (busStopListService != null) {
+            try {
+                var stops = busStopListService.getStaionByRoute(routeId);
+                if (stops != null) {
+                    for (var s : stops) {
+                        try {
+                            Integer c = Integer.parseInt(String.valueOf(s.getRouteType()).trim());
+                            if (c != null) return c;
+                        } catch (Exception ignore) {}
+                    }
+                }
+            } catch (Exception ignore) {}
         }
         return null;
     }
 
-    /** 라벨 변환은 다른 서비스에서도 쓰므로 public */
     public String toRouteTypeLabel(Integer code) { return toRouteTypeLabel(code, null); }
-
     private String toRouteTypeLabel(Integer code, String fallback) {
         if (code == null) return (fallback != null ? fallback : "기타");
         return switch (code) {
@@ -153,24 +129,31 @@ public class ArrivalNowService {
         };
     }
 
-    private Integer safeParseInt(Object o) { try { return o==null?null:Integer.parseInt(String.valueOf(o).trim()); } catch (Exception e) { return null; } }
-
-    /** 리스트/상세 합성용: routeId -> (code,label) 한 번에 */
-    // after ✅ 정류장 목록을 받아서 fallback로 사용
     public RouteTypeMeta resolveRouteType(String routeId) {
-        List<BusStopListDto> stops = null;
-        try {
-            stops = busStopListService.getStaionByRoute(routeId);
-        } catch (Exception ignore) { /* 네트워크/파싱 예외 무시하고 1순위만 시도 */ }
-
-        Integer code = resolveRouteTypeCode(routeId, stops); // ← null 대신 stops 전달
+        Integer code = resolveRouteTypeCode(routeId);
         return new RouteTypeMeta(code, toRouteTypeLabel(code));
     }
 
-    /** 작은 DTO */
     public static class RouteTypeMeta {
         public final Integer code;
         public final String  label;
         public RouteTypeMeta(Integer code, String label) { this.code = code; this.label = label; }
+    }
+
+    // ---------- RAW 매핑용 작은 래퍼 ----------
+    private static final class StopRowRaw {
+        final Integer seq; final String stopName; final String arsId;
+        StopRowRaw(Integer seq, String stopName, String arsId) {
+            this.seq = seq; this.stopName = stopName; this.arsId = arsId;
+        }
+    }
+
+    private StopRowRaw toStopRowRaw(Object raw) {
+        if (raw == null) return null;
+        Object[] a = (Object[]) raw;
+        Integer seq      = a[0] == null ? null : ((Number)a[0]).intValue();
+        String  stopName = a[1] == null ? null : a[1].toString();
+        String  arsId    = a[2] == null ? null : a[2].toString();
+        return new StopRowRaw(seq, stopName, arsId);
     }
 }
