@@ -14,7 +14,9 @@ public record ReservationDto(
         String destArsId,
         String status,
         String routeName,
-        java.time.LocalDateTime updatedAt
+        java.time.LocalDateTime updatedAt,
+        Integer busRouteType,
+        String routeTypeName
 ) {
     public static ReservationDto from(ReservationEntity e) {
         return new ReservationDto(
@@ -29,7 +31,9 @@ public record ReservationDto(
                 e.getDestArsId(),
                 e.getStatus().name(),
                 e.getRouteName(),
-                e.getUpdatedAt()
+                e.getUpdatedAt(),
+                e.getBusRouteType(), 
+                e.getRouteTypeName()
         );
     }
 }

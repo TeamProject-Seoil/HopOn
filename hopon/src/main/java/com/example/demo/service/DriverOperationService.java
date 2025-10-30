@@ -97,12 +97,9 @@ public class DriverOperationService {
     @Transactional
     public StartOperationResponse startOperation(Authentication auth, StartOperationRequest req) {
         var user = authUserResolver.requireUser(auth);
-
-        // 기존 RUNNING 있으면 막기
         driverOperationRepository.findFirstByUserNumAndStatus(user.getUserNum(), DriverOperationStatus.RUNNING)
                 .ifPresent(op -> { throw new ResponseStatusException(HttpStatus.CONFLICT, "ALREADY_RUNNING"); });
 
-        // vehicleId 없으면 배정된 차량 사용
         String vehicleId = StringUtils.hasText(req.getVehicleId())
                 ? req.getVehicleId()
                 : driverVehicleRepository.findByUserNum(user.getUserNum())
@@ -112,17 +109,17 @@ public class DriverOperationService {
         var vehicle = busVehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "VEHICLE_NOT_FOUND"));
 
-        // 공공 API에서 노선의 실시간 차량 목록 → 번호판 매칭
+        // 공공 API 매칭
         List<BusLocationDto> apiVehicles = busLocationService.getBusPosByRtid(vehicle.getRouteId());
         String dbPlateNorm = normalizePlate(vehicle.getPlateNo());
         BusLocationDto matched = apiVehicles.stream()
                 .filter(v -> dbPlateNorm.equals(normalizePlate(v.getPlainNo())))
                 .findFirst()
                 .orElse(null);
+        if (matched == null) throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PLATE_NOT_FOUND_ON_ROUTE");
 
-        if (matched == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "PLATE_NOT_FOUND_ON_ROUTE");
-        }
+        // ★ 노선유형 메타 계산 → 운행에 스냅샷 저장
+        ArrivalNowService.RouteTypeMeta meta = arrivalNowService.resolveRouteType(vehicle.getRouteId());
 
         var now = LocalDateTime.now();
         var op = DriverOperation.builder()
@@ -130,6 +127,8 @@ public class DriverOperationService {
                 .vehicleId(vehicle.getVehicleId())
                 .routeId(vehicle.getRouteId())
                 .routeName(vehicle.getRouteName())
+                .routeTypeCode(meta.code)          // ★ 저장
+                .routeTypeLabel(meta.label)        // ★ 저장
                 .apiVehId(matched.getVehId())
                 .apiPlainNo(matched.getPlainNo())
                 .status(DriverOperationStatus.RUNNING)
@@ -261,7 +260,10 @@ public class DriverOperationService {
         }
 
         // 노선 정류장 + 도착정보 합성 계산
-        return arrivalNowService.build(op.getRouteId(), matched, op.getApiPlainNo());
+        ArrivalNowResponse resp = arrivalNowService.build(op.getRouteId(), matched, op.getApiPlainNo());
+        resp.setRouteTypeCode(op.getRouteTypeCode());
+        resp.setRouteTypeLabel(op.getRouteTypeLabel());
+        return resp;
     }
 
     /* ===============================
@@ -332,19 +334,25 @@ public class DriverOperationService {
 
     /** 엔티티 → DTO 매핑하면서 routeType 계산 */
     private DriverOperationListItem toListItemWithRouteType(DriverOperation op) {
-        // 호출 시점 계산(주입/저장 아님)
-        ArrivalNowService.RouteTypeMeta meta = arrivalNowService.resolveRouteType(op.getRouteId());
+        Integer code  = op.getRouteTypeCode();
+        String  label = op.getRouteTypeLabel();
+
+        if (code == null || (label == null || label.isBlank())) {
+            var meta = arrivalNowService.resolveRouteType(op.getRouteId());
+            code  = (code  != null) ? code  : meta.code;
+            label = (label != null && !label.isBlank()) ? label : meta.label;
+        }
 
         return DriverOperationListItem.builder()
                 .id(op.getId())
                 .routeId(op.getRouteId())
                 .routeName(op.getRouteName())
                 .vehicleId(op.getVehicleId())
-                .plateNo(op.getApiPlainNo())     // 없으면 vehicle 테이블에서 plateNo 가져와도 됨
+                .plateNo(op.getApiPlainNo())
                 .startedAt(toIsoOrNull(op.getStartedAt()))
                 .endedAt(toIsoOrNull(op.getEndedAt()))
-                .routeTypeCode(meta.code)        // ✅ 계산 결과 붙임
-                .routeTypeLabel(meta.label)      // ✅ 계산 결과 붙임
+                .routeTypeCode(code)
+                .routeTypeLabel(label)
                 .build();
     }
 }

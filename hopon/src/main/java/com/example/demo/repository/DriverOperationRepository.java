@@ -25,4 +25,11 @@ public interface DriverOperationRepository extends JpaRepository<DriverOperation
     Optional<DriverOperation> findByIdAndUserNumAndStatus(Long id, Long userNum, DriverOperationStatus status);
     List<DriverOperation> findByUserNumAndStatusOrderByEndedAtDesc(Long userNum, DriverOperationStatus status);
     Optional<DriverOperation> findByIdAndUserNum(Long id, Long userNum);
+    
+
+Optional<DriverOperation> findFirstByApiVehIdAndStatusOrderByUpdatedAtDesc(
+        String apiVehId, DriverOperationStatus status);
+
+Optional<DriverOperation> findFirstByApiPlainNoAndStatusOrderByUpdatedAtDesc(
+        String apiPlainNo, DriverOperationStatus status);
 }

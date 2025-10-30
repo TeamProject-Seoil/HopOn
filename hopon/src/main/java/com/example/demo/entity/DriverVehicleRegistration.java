@@ -30,6 +30,22 @@ public class DriverVehicleRegistration {
     @Column(name = "vehicle_id", length = 64, nullable = false)
     private String vehicleId;
 
+    /** 차량번호(번호판) - 배정 시 스냅샷 */
+    @Column(name = "plate_no", length = 20)
+    private String plateNo;
+
+    /** 노선명 - 배정 시 스냅샷 ★추가 */
+    @Column(name = "route_name", length = 50)
+    private String routeName;
+    
+    /** 노선유형 코드(예: 3=간선) - 배정 시 스냅샷 */
+    @Column(name = "route_type_code")
+    private Integer routeTypeCode;
+
+    /** 노선유형 라벨(예: "간선") - 배정 시 스냅샷 */
+    @Column(name = "route_type_label", length = 20)
+    private String routeTypeLabel;
+
     /** 최초 등록 시각 (DB DEFAULT CURRENT_TIMESTAMP 사용) */
     @Column(name = "created_at", nullable = false, insertable = false, updatable = false)
     private LocalDateTime createdAt;
