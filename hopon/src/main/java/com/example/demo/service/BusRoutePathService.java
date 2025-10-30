@@ -7,6 +7,7 @@ import java.util.List;
 import com.example.demo.repository.StopCoord;
 import com.example.demo.repository.StopRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -25,6 +26,7 @@ public class BusRoutePathService {
     private String serviceKey;
 
     /** 1) 전체 노선 polyline: getRoutePathList (JSON) */
+    @Cacheable(value = "routePolylineCache", key = "#busRouteId")
     public List<BusRoutePathDto> getRoutePathList(String busRouteId) {
         JsonNode root = webClient.get()
                 .uri(uri -> uri
@@ -37,13 +39,13 @@ public class BusRoutePathService {
                 .bodyToMono(JsonNode.class)
                 .block();
 
-        if (root == null) return List.of();
+        if (root == null) throw new IllegalStateException("getRoutePath null response");
 
         JsonNode items = root.path("msgBody").path("itemList");
         if (!items.isArray()) {
             items = root.path("response").path("msgBody").path("itemList");
         }
-        if (!items.isArray()) return List.of();
+        if (!items.isArray()) throw new IllegalStateException("getRoutePath invalid payload");
 
         List<Temp> buf = new ArrayList<>();
         for (JsonNode n : items) {
