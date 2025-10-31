@@ -156,4 +156,8 @@ public class ArrivalNowService {
         String  arsId    = a[2] == null ? null : a[2].toString();
         return new StopRowRaw(seq, stopName, arsId);
     }
+    
+    public Integer getRouteTypeCode(String routeId) {
+        return resolveRouteTypeCode(routeId);
+    }
 }
