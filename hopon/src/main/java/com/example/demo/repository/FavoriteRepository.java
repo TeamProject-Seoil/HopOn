@@ -15,8 +15,9 @@ public interface FavoriteRepository extends JpaRepository<FavoriteEntity, Long> 
 
     // 🔥 개수 제한 로직에서 쓰던 메서드 삭제 가능: long countByUser(UserEntity user);
 
-    boolean existsByUserAndRouteIdAndBoardStopIdAndDestStopId(
-            UserEntity user, String routeId, String boardStopId, String destStopId);
+	boolean existsByUserAndRouteIdAndDirectionAndBoardStopIdAndDestStopId(
+		    UserEntity user, String routeId, String direction, String boardStopId, String destStopId
+		);
 
     // 🔁 전체 다 조회 (최신순)
     List<FavoriteEntity> findByUserOrderByUpdatedAtDesc(UserEntity user);

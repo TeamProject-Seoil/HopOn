@@ -13,4 +13,8 @@ public class FavoriteResponse {
     private String destStopName;
     private String destArsId;
     private String routeName;
+    
+    // ⬇ 추가
+    private Integer busRouteType;
+    private String routeTypeName;
 }

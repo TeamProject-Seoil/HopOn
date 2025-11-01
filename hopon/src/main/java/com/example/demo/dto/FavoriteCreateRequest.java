@@ -12,4 +12,7 @@ public class FavoriteCreateRequest {
     private String destStopName;
     private String destArsId;
     private String routeName;
+    
+    private Integer busRouteType;     // 예: 1(간선), 2(지선) 등
+    private String routeTypeName;     // 예: "간선", "지선"
 }
