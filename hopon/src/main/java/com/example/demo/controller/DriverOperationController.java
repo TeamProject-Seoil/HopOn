@@ -164,4 +164,11 @@ public class DriverOperationController {
                 .routeTypeLabel(meta == null ? null : meta.label)
                 .build();
     }
+    
+    /** 9) 현재 운행을 '지연' 상태로 표시 */
+    @PostMapping("/operations/delay")
+    public ResponseEntity<?> markDelayed(Authentication auth) {
+        service.markDelayed(auth);
+        return ResponseEntity.ok(Map.of("ok", true));
+    }
 }

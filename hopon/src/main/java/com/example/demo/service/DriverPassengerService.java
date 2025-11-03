@@ -1,9 +1,11 @@
 // src/main/java/com/example/demo/service/DriverPassengerService.java
 package com.example.demo.service;
 
-import com.example.demo.dto.*;
+import com.example.demo.dto.DriverPassengerDto;
+import com.example.demo.dto.DriverPassengerListResponse;
 import com.example.demo.entity.*;
-import com.example.demo.repository.*;
+import com.example.demo.repository.DriverOperationRepository;
+import com.example.demo.repository.ReservationRepository;
 import com.example.demo.support.AuthUserResolver;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -11,7 +13,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.ZoneOffset;
-import java.util.*;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -22,8 +26,10 @@ public class DriverPassengerService {
     private final DriverOperationRepository driverOperationRepository;
     private final ReservationRepository reservationRepository;
 
+    // 기사 입장에서 "현재 태울/타고 있는 승객"으로 취급할 예약 상태
+    // 탑승 여부는 BoardingStage로 나눔
     private static final Set<ReservationStatus> ACTIVE =
-            EnumSet.of(ReservationStatus.CONFIRMED, ReservationStatus.BOARDED);
+            EnumSet.of(ReservationStatus.CONFIRMED);
 
     @Transactional
     public DriverPassengerListResponse listActivePassengersNow(Authentication auth) {
@@ -35,8 +41,12 @@ public class DriverPassengerService {
 
         if (op == null) {
             return DriverPassengerListResponse.builder()
-                    .operationId(null).routeId(null).routeName(null)
-                    .count(0).items(List.of()).build();
+                    .operationId(null)
+                    .routeId(null)
+                    .routeName(null)
+                    .count(0)
+                    .items(List.of())
+                    .build();
         }
 
         List<ReservationEntity> rows = List.of();
@@ -56,7 +66,9 @@ public class DriverPassengerService {
         }
 
         var list = (rows == null ? List.<ReservationEntity>of() : rows)
-                .stream().map(this::toDto).collect(Collectors.toList());
+                .stream()
+                .map(this::toDto)
+                .collect(Collectors.toList());
 
         return DriverPassengerListResponse.builder()
                 .operationId(op.getId())
@@ -79,11 +91,24 @@ public class DriverPassengerService {
                 .boardingStopName(nz(r.getBoardStopName()))
                 .alightingStopId(nz(r.getDestStopId()))
                 .alightingStopName(nz(r.getDestStopName()))
+                // 예약 상태 (CONFIRMED/CANCELLED/COMPLETED)
                 .status(r.getStatus() != null ? r.getStatus().name() : null)
-                .createdAtIso(r.getRequestedAt() != null ? r.getRequestedAt().toInstant(ZoneOffset.UTC).toString() : null)
-                .updatedAtIso(r.getUpdatedAt()  != null ? r.getUpdatedAt().toInstant(ZoneOffset.UTC).toString()  : null)
+                // 탑승 단계 (NOSHOW/BOARDED/ALIGHTED)
+                .boardingStage(r.getBoardingStage() != null ? r.getBoardingStage().name() : null)
+                .createdAtIso(
+                        r.getRequestedAt() != null
+                                ? r.getRequestedAt().toInstant(ZoneOffset.UTC).toString()
+                                : null
+                )
+                .updatedAtIso(
+                        r.getUpdatedAt() != null
+                                ? r.getUpdatedAt().toInstant(ZoneOffset.UTC).toString()
+                                : null
+                )
                 .build();
     }
 
-    private static String nz(String s){ return (s==null || s.isBlank()) ? null : s; }
+    private static String nz(String s) {
+        return (s == null || s.isBlank()) ? null : s;
+    }
 }

@@ -6,34 +6,38 @@ public record ReservationDto(
         Long id,
         String routeId,
         String direction,
-        String boardStopId,     // ✅ 추가
+        String boardStopId,
         String boardStopName,
         String boardArsId,
-        String destStopId,      // ✅ 추가
+        String destStopId,
         String destStopName,
         String destArsId,
         String status,
         String routeName,
         java.time.LocalDateTime updatedAt,
         Integer busRouteType,
-        String routeTypeName
+        String routeTypeName,
+        Boolean delayed,
+        String boardingStage          // ✅ 추가
 ) {
-    public static ReservationDto from(ReservationEntity e) {
+    public static ReservationDto from(ReservationEntity e, boolean delayed) {
         return new ReservationDto(
                 e.getId(),
                 e.getRouteId(),
                 e.getDirection(),
-                e.getBoardStopId(),   // ✅ 매핑
+                e.getBoardStopId(),
                 e.getBoardStopName(),
                 e.getBoardArsId(),
-                e.getDestStopId(),    // ✅ 매핑
+                e.getDestStopId(),
                 e.getDestStopName(),
                 e.getDestArsId(),
                 e.getStatus().name(),
                 e.getRouteName(),
                 e.getUpdatedAt(),
-                e.getBusRouteType(), 
-                e.getRouteTypeName()
+                e.getBusRouteType(),
+                e.getRouteTypeName(),
+                delayed,
+                e.getBoardingStage() != null ? e.getBoardingStage().name() : null
         );
     }
 }

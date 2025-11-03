@@ -75,4 +75,10 @@ public class ReservationEntity {
 
     @Column(name = "route_type_name", length = 20)
     private String routeTypeName;
+    
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "boarding_stage", nullable = false, length = 16)
+    @Builder.Default
+    private BoardingStage boardingStage = BoardingStage.NOSHOW;   // ✅ 새 필드
 }
