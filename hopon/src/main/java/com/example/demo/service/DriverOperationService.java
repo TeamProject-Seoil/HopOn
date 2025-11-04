@@ -365,7 +365,9 @@ public class DriverOperationService {
                 .findFirstByUserNumAndStatus(user.getUserNum(), DriverOperationStatus.RUNNING)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "NO_ACTIVE_OPERATION"));
 
-        op.setDelayed(true);
+        // 🔽 여기서 토글
+        boolean next = !op.isDelayed();
+        op.setDelayed(next);
         op.setUpdatedAt(LocalDateTime.now());
         driverOperationRepository.save(op);
 
@@ -375,4 +377,5 @@ public class DriverOperationService {
         //    - status == CONFIRMED && boardingStage == NOSHOW 인 사람만
         // 2) 각각의 사용자의 디바이스 토큰으로 "지연 알림" push
     }
+
 }
