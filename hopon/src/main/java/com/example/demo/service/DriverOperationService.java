@@ -34,7 +34,8 @@ public class DriverOperationService {
     private final BusLocationService busLocationService;
     private final DriverLocationStreamService streamService;
     private final DriverVehicleRegistrationService registrationService;
-
+    private final ReservationRepository reservationRepository;
+    private final NotificationService notificationService;
     private final ArrivalNowService arrivalNowService;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_INSTANT;
@@ -357,6 +358,7 @@ public class DriverOperationService {
     }
     
     
+
     @Transactional
     public void markDelayed(Authentication auth) {
         var user = authUserResolver.requireUser(auth);
@@ -365,17 +367,24 @@ public class DriverOperationService {
                 .findFirstByUserNumAndStatus(user.getUserNum(), DriverOperationStatus.RUNNING)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "NO_ACTIVE_OPERATION"));
 
-        // 🔽 여기서 토글
         boolean next = !op.isDelayed();
         op.setDelayed(next);
         op.setUpdatedAt(LocalDateTime.now());
         driverOperationRepository.save(op);
 
-        // TODO: 여기서 FCM 또는 알림 서비스 연동 가능
-        // 1) 이 운행과 연결된 예약들 조회
-        //    - operationId == op.getId()
-        //    - status == CONFIRMED && boardingStage == NOSHOW 인 사람만
-        // 2) 각각의 사용자의 디바이스 토큰으로 "지연 알림" push
+        // ✅ 지연 ON일 때만 예약자에게 알림
+        if (next) {
+            var reservations = reservationRepository.findActiveNoshowByOperation(
+                    op.getId(),
+                    ReservationStatus.CONFIRMED,
+                    BoardingStage.NOSHOW
+            );
+            for (var r : reservations) {
+                if (r.getUser() != null) {
+                    notificationService.sendDelayNotification(r.getUser(), r);
+                }
+            }
+        }
     }
 
 }
