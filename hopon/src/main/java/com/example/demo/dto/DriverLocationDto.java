@@ -20,5 +20,8 @@ public class DriverLocationDto {
     private String  routeType;
     private String  routeTypeLabel;
     private Integer routeTypeCode;
+    
+    private Boolean delayed;
+    
 }
 
