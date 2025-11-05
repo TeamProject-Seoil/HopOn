@@ -1,6 +1,7 @@
 // src/main/java/com/example/demo/repository/ReservationRepository.java
 package com.example.demo.repository;
 
+import com.example.demo.entity.BoardingStage;
 import com.example.demo.entity.ReservationEntity;
 import com.example.demo.entity.ReservationStatus;
 import com.example.demo.entity.UserEntity;
@@ -72,4 +73,19 @@ public interface ReservationRepository extends JpaRepository<ReservationEntity, 
     """)
     List<ReservationEntity> findActiveByRoute(@Param("routeId") String routeId,
                                               @Param("statuses") Set<ReservationStatus> statuses);
+
+ // ReservationRepository.java
+    @Query("""
+           select r
+           from ReservationEntity r
+           where r.operationId = :opId
+             and r.status = :status
+             and r.boardingStage = :stage
+           """)
+    List<ReservationEntity> findActiveNoshowByOperation(
+            @Param("opId") Long operationId,
+            @Param("status") ReservationStatus status,
+            @Param("stage") BoardingStage stage
+    );
+
 }

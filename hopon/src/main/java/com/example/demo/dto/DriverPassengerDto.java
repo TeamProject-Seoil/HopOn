@@ -15,6 +15,9 @@ public class DriverPassengerDto {
     private String alightingStopId;
     private String alightingStopName;
 
+    /** 탑승 단계: NOSHOW / BOARDED / ALIGHTED */
+    private String boardingStage;
+
     private String status;          // CONFIRMED / BOARDED
     private String createdAtIso;    // ISO-8601 (UTC)
     private String updatedAtIso;    // ISO-8601 (UTC)

@@ -63,4 +63,8 @@ public class DriverOperation {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    
+    @Column(name = "is_delayed", nullable = false)
+    @Builder.Default
+    private boolean delayed = false;   // ✅ 지연 여부
 }

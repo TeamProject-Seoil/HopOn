@@ -31,7 +31,7 @@ public class DriverLocationController {
         boolean stale = op.getUpdatedAt() == null ||
                 Duration.between(op.getUpdatedAt().toInstant(ZoneOffset.UTC), Instant.now())
                         .getSeconds() > 15;
-
+        boolean delayed = (op != null && op.isDelayed());
         var dto = DriverLocationDto.builder()
                 .operationId(op.getId())
                 .lat(op.getLastLat())
@@ -39,6 +39,7 @@ public class DriverLocationController {
                 .updatedAtIso(op.getUpdatedAt() == null ? null :
                         op.getUpdatedAt().toInstant(ZoneOffset.UTC).truncatedTo(ChronoUnit.SECONDS).toString())
                 .stale(stale)
+                .delayed(delayed) 
                 .build();
         return ResponseEntity.ok(dto);
     }

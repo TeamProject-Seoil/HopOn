@@ -34,7 +34,8 @@ public class DriverOperationService {
     private final BusLocationService busLocationService;
     private final DriverLocationStreamService streamService;
     private final DriverVehicleRegistrationService registrationService;
-
+    private final ReservationRepository reservationRepository;
+    private final NotificationService notificationService;
     private final ArrivalNowService arrivalNowService;
 
     private static final DateTimeFormatter ISO = DateTimeFormatter.ISO_INSTANT;
@@ -355,4 +356,35 @@ public class DriverOperationService {
                 .routeTypeLabel(label)
                 .build();
     }
+    
+    
+
+    @Transactional
+    public void markDelayed(Authentication auth) {
+        var user = authUserResolver.requireUser(auth);
+
+        var op = driverOperationRepository
+                .findFirstByUserNumAndStatus(user.getUserNum(), DriverOperationStatus.RUNNING)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "NO_ACTIVE_OPERATION"));
+
+        boolean next = !op.isDelayed();
+        op.setDelayed(next);
+        op.setUpdatedAt(LocalDateTime.now());
+        driverOperationRepository.save(op);
+
+        // ✅ 지연 ON일 때만 예약자에게 알림
+        if (next) {
+            var reservations = reservationRepository.findActiveNoshowByOperation(
+                    op.getId(),
+                    ReservationStatus.CONFIRMED,
+                    BoardingStage.NOSHOW
+            );
+            for (var r : reservations) {
+                if (r.getUser() != null) {
+                    notificationService.sendDelayNotification(r.getUser(), r);
+                }
+            }
+        }
+    }
+
 }
