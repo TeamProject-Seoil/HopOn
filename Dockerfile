@@ -2,6 +2,7 @@
 FROM gradle:8.10-jdk21-alpine AS build
 WORKDIR /app
 COPY . .
+WORKDIR /app/hopon
 RUN ./gradlew clean bootJar -x test
 
 # 2단계: 실행 이미지 (JRE 21)
