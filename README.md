@@ -54,9 +54,9 @@
 
 <table>
   <tr>
-    <th style="width:90px;">이름</th>
-    <th style="width:70px;">역할</th>
-    <th style="width:700px;">담당</th>
+    <th style="width:110px;">이름</th>
+    <th style="width:80px;">역할</th>
+    <th style="width:670px;">담당</th>
   </tr>
   <tr>
     <td><b>조건희</b></td>
