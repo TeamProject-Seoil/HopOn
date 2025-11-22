@@ -18,7 +18,27 @@
 ---
 
 <!-- 여기에 대표 이미지 넣기 -->
-<img width="80" height="160" alt="hopon-preview" src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png"/>
+<!-- 대표 이미지: 모바일 2개 + 웹 1개 가로 배치 -->
+<p align="center">
+  <!-- 모바일 1 -->
+  <img
+    src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png"
+    alt="HopOn 사용자 앱"
+    width="120"
+  />
+  <!-- 모바일 2 (필요하면 다른 캡처로 바꾸면 됨) -->
+  <img
+    src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png"
+    alt="HopOn 기사 앱"
+    width="120"
+  />
+  <!-- 웹 화면 (관리자 페이지 캡처로 교체) -->
+  <img
+    src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/ADMIN_WEB_SCREENSHOT.png"
+    alt="HopOn 관리자 웹"
+    width="360"
+  />
+</p>
 
 ---
 
