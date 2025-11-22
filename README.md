@@ -17,15 +17,11 @@
 
 ---
 
-<!-- 여기에 대표 이미지 넣기 -->
-<!-- 대표 이미지: 모바일 2개 + 웹 1개 가로 배치 -->
-<!-- 대표 이미지: 모바일 2개 + 웹 1개 가로 배치 -->
 <p align="center">
   <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png" alt="HopOn 사용자 앱" width="170" />
   <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B8%B0%EC%82%AC%EC%95%B1%20%ED%99%94%EB%A9%B4.png" alt="HopOn 기사 앱" width="170" />
   <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B4%80%EB%A6%AC%EC%9E%90%ED%8E%98%EC%9D%B4%EC%A7%80%20%ED%99%94%EB%A9%B4.png" alt="HopOn 관리자 웹" width="480" />
 </p>
-
 
 ---
 
@@ -131,10 +127,12 @@
 
 ## 🌐 배포 구조
 
-| 구분 | 주소 | 설명 |
-|------|------|------|
-| 관리자 웹 | https://www.hoponhub.store | HopOn Admin Page |
-| 사용자/기사 앱 | API 요청 | HopOn Backend |
-| Backend API | `/auth`, `/users`, `/reservations`, `/driver`, `/admin` | Spring Boot 통합 백엔드 |
+| 구분 | 도메인 / 경로 | 연결 대상 | 설명 |
+|------|----------------|------------|------|
+| 사용자 프론트엔드 | [HopOn_UserApp Download](https://github.com/TeamProject-Seoil/HopOn_UserAPP/releases/tag/v1.0.0) | HopOn_UserApp (Android Studio) | HopOn 사용자전용 앱 서비스 |
+| 기사 프론트엔드 | [HopOn_DriverApp Download](https://github.com/TeamProject-Seoil/HopOn_DriverApp/releases/tag/v1.0.0) | HopOn_DriverApp (Android Studio) | HopOn 기사전용 앱 서비스  |
+| 관리자 프론트엔드 | [www.hoponhub.store](http://www.hoponhub.store) | HopOn_ADMIN_Page (Vue 3) | HopOn 관리자 대시보드 |
+| 사용자 + 기사 백엔드 API | `/api` | HopOn (Spring Boot) | 사용자 + 기사 예약, 운행, 문의, 즐겨찾기, 버스 API |
+| 관리자 백엔드 API | `/admin` | HopOn_ADMIN (Spring Boot) | 관리자 전용 API |
 
 ---
