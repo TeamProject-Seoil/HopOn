@@ -5,17 +5,22 @@
 
 ---
 
-<p align="center">
-  <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png" width="220"/>
-  <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B8%B0%EC%82%AC%EC%95%B1%20%ED%99%94%EB%A9%B4.png" width="220"/>
-  <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B4%80%EB%A6%AC%EC%9E%90%ED%8E%98%EC%9D%B4%EC%A7%80%20%ED%99%94%EB%A9%B4.png" width="500"/>
-</p>
-
-<p align="center">
-  <b>사용자 앱</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-  <b>기사 앱</b> &nbsp;&nbsp;&nbsp;&nbsp; 
-  <b>관리자 웹 대시보드</b>
-</p>
+<table align="center">
+  <tr>
+    <td align="center">
+      <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png" width="220"/><br/>
+      <sub><b>사용자 앱</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B8%B0%EC%82%AC%EC%95%B1%20%ED%99%94%EB%A9%B4.png" width="220"/><br/>
+      <sub><b>기사 앱</b></sub>
+    </td>
+    <td align="center">
+      <img src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EA%B4%80%EB%A6%AC%EC%9E%90%ED%8E%98%EC%9D%B4%EC%A7%80%20%ED%99%94%EB%A9%B4.png" width="500"/><br/>
+      <sub><b>관리자 웹 대시보드</b></sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
