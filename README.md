@@ -2,7 +2,7 @@
 |------|------------|------|
 | 사용자 앱 | 📱 **HopOn_UserAPP (Android)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__UserAPP-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn_UserApp) |
 | 기사 앱 | 🚗 **HopOn_DriverAPP (Android)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__DriverAPP-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn_DriverApp) |
-| 관리자 페이지 | 🌐 **HopOn_ADMIN_Page (Vue 3)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__Admin_Page-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page) |
+| 관리자 대시보드 | 🌐 **HopOn_ADMIN_Page (Vue 3)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__Admin_Page-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page) |
 | 사용자 + 기사 백엔드 | ⚙️ **HopOn (Spring Boot)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__Backend-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn) |
 | 관리자 백엔드 | ⚙️ **HopOn_ADMIN (Spring Boot)** | [![Repo](https://img.shields.io/badge/GitHub-HopOn__Admin_Backend-181717?logo=github)](https://github.com/TeamProject-Seoil/HopOn_ADMIN) |
 
@@ -43,11 +43,11 @@
 
 | 이름 | 역할 | 담당 | 
 |------|------|------|
-| **조건희** | 팀장 | 인프라·배포, API, SSE, 예약/운행 핵심 로직 |
-| **김민재** | 팀원 | 지도 UI, 예약/알림, Overlay/Marker |
-| **유주현** | 팀원 | 위치 업데이트, 운행 관리 UI |
-| **최준영** | 팀원 | Vue3 UI, 대시보드, 권한 관리 |
-| **원동건** | 팀원 | 디자인/문서 |
+| **조건희** | 팀장 | 사용자 앱 UI 개발, 기사 앱 UI 개발, 주요 화면 구성 및 컴포넌트 제작, PPT 제작, 팀 일정/역할 관리 |
+| **김민재** | 팀원 | 사용자 앱 UI 개발, 기사 앱 UI 개발, 주요 화면 구성 및 컴포넌트 제작, 발표 |
+| **유주현** | 팀원 | 사용자 앱 UI 개발, 기사 앱 UI 개발, 주요 화면 구성 및 컴포넌트 제작, 프로젝트 홍보 영상 제작, PPT 제작 지원 |
+| **최준영** | 팀원 | 사용자 앱 기능, 메인화면 기능, 버스 데이터 Open API 연동, NAVER MAPS API 연동, 메인 기능 로직 |
+| **원동건** | 팀원 | 기사 앱 기능, 관리자 대시보드 개발, 로그인·JWT·권한 처리, 문의/즐겨찾기/예약 기능, AWS 배포 |
 
 ---
 
@@ -132,7 +132,7 @@
 | 사용자 프론트엔드 | [HopOn_UserApp Download](https://github.com/TeamProject-Seoil/HopOn_UserAPP/releases/tag/v1.0.0) | HopOn_UserApp (Android Studio) | HopOn 사용자전용 앱 서비스 |
 | 기사 프론트엔드 | [HopOn_DriverApp Download](https://github.com/TeamProject-Seoil/HopOn_DriverApp/releases/tag/v1.0.0) | HopOn_DriverApp (Android Studio) | HopOn 기사전용 앱 서비스  |
 | 관리자 프론트엔드 | [www.hoponhub.store](http://www.hoponhub.store) | HopOn_ADMIN_Page (Vue 3) | HopOn 관리자 대시보드 |
-| 사용자 + 기사 백엔드 API | `/api` | HopOn (Spring Boot) | 사용자 + 기사 예약, 운행, 문의, 즐겨찾기, 버스 API |
-| 관리자 백엔드 API | `/admin` | HopOn_ADMIN (Spring Boot) | 관리자 전용 API |
+| 사용자 + 기사 백엔드 API | `/api`, `/auth`, `/users`  | HopOn (Spring Boot) | 사용자 + 기사 예약, 운행, 문의, 즐겨찾기, 버스 API |
+| 관리자 백엔드 API | `/admin`, `/auth/`,`/users`,`/reservations/`, `/actuator/health` | HopOn_ADMIN (Spring Boot) | 관리자 전용 API |
 
 ---
