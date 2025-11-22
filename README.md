@@ -18,7 +18,7 @@
 ---
 
 <!-- 여기에 대표 이미지 넣기 -->
-<img width="1883" height="836" alt="hopon-preview" src="(이미지 링크)"/>
+<img width="1883" height="836" alt="hopon-preview" src="https://github.com/TeamProject-Seoil/HopOn_ADMIN_Page/blob/main/src/assets/%EC%82%AC%EC%9A%A9%EC%9E%90%EC%95%B1%20%ED%99%94%EB%A9%B4.png"/>
 
 ---
 
